@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simulador de Juego LED Vertical - ESP32</title>
+  <title>Simulador de Consola LED Multi-Juegos - ESP32</title>
   
   <!-- Google Fonts: Outfit & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,16 +12,16 @@
 
   <style>
     :root {
-      --bg-dark: #07070f;
-      --bg-card: rgba(18, 18, 30, 0.7);
-      --border-color: rgba(255, 255, 255, 0.08);
+      --bg-dark: #06060c;
+      --bg-card: rgba(16, 16, 26, 0.7);
+      --border-color: rgba(255, 255, 255, 0.06);
       --neon-blue: #00f0ff;
       --neon-green: #39ff14;
       --neon-red: #ff0055;
       --neon-gold: #ffaa00;
       --neon-magenta: #f000ff;
       --text-main: #f5f5fa;
-      --text-muted: #8e8ea8;
+      --text-muted: #83839c;
     }
 
     * {
@@ -34,8 +34,8 @@
       font-family: 'Outfit', sans-serif;
       background-color: var(--bg-dark);
       background-image: 
-        radial-gradient(at 10% 10%, rgba(40, 20, 100, 0.25) 0px, transparent 50%),
-        radial-gradient(at 90% 90%, rgba(20, 60, 120, 0.25) 0px, transparent 50%);
+        radial-gradient(at 0% 0%, rgba(35, 15, 80, 0.3) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(15, 45, 90, 0.3) 0px, transparent 50%);
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
@@ -89,7 +89,7 @@
       }
     }
 
-    /* Glassmorphism Card base */
+    /* Glassmorphism Card */
     .card {
       background: var(--bg-card);
       backdrop-filter: blur(16px);
@@ -120,11 +120,10 @@
       font-weight: 700;
     }
 
-    /* The outer acrylic tube casing */
     .acrylic-tube {
       width: 70px;
       height: 720px;
-      background: linear-gradient(90deg, rgba(20,20,35,0.8), rgba(40,40,70,0.4) 30%, rgba(20,20,35,0.8));
+      background: linear-gradient(90deg, rgba(15,15,25,0.85), rgba(35,35,55,0.4) 30%, rgba(15,15,25,0.85));
       border: 2px solid rgba(255,255,255,0.05);
       border-top: 3px solid rgba(255,255,255,0.15);
       border-bottom: 3px solid rgba(255,255,255,0.15);
@@ -139,7 +138,6 @@
       position: relative;
     }
 
-    /* Metal caps at top and bottom to look like a premium physical assembly */
     .acrylic-tube::before, .acrylic-tube::after {
       content: '';
       position: absolute;
@@ -160,7 +158,6 @@
       border-radius: 2px 2px 6px 6px;
     }
 
-    /* The actual strip inside the tube - Column-Reverse puts index 0 at bottom! */
     .led-strip-vertical {
       height: 100%;
       display: flex;
@@ -174,43 +171,38 @@
       width: 8px;
       height: 4px;
       border-radius: 2px;
-      background: #11111a;
-      border: 1px solid #1a1a26;
-      transition: background 0.05s ease, box-shadow 0.05s ease;
+      background: #111118;
+      border: 1px solid #161622;
+      transition: background 0.04s ease, box-shadow 0.04s ease;
       position: relative;
     }
 
-    /* Target Zone Visual Bracket on the tube */
-    .target-bracket {
+    /* Target overlay elements dynamic styling */
+    .target-overlay {
       position: absolute;
       left: 6px;
       width: 58px;
-      /* Target is LEDs 60-66. Height calculated to match position exactly */
-      /* 720px total height, padding is 25px each side. strip space is 670px */
-      /* Target is in the middle (60/120) */
-      bottom: 355px; 
-      height: 42px;
-      border: 2px dashed rgba(255, 255, 255, 0.35);
       border-radius: 6px;
       pointer-events: none;
-      box-shadow: 0 0 10px rgba(255,255,255,0.05);
+      box-shadow: 0 0 10px rgba(255,255,255,0.03);
       display: flex;
       align-items: center;
       justify-content: center;
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      transition: all 0.3s ease;
     }
     
-    .target-bracket::after {
-      content: 'OBJETIVO';
+    .target-overlay::after {
       font-size: 0.55rem;
-      color: rgba(255,255,255,0.5);
+      color: rgba(255,255,255,0.4);
       font-weight: 700;
       letter-spacing: 0.5px;
-      background: #000;
+      background: #06060c;
       padding: 0 4px;
       position: absolute;
     }
 
-    /* Indicator labels beside the tube */
+    /* Markers beside the tube */
     .tube-markers {
       position: absolute;
       right: -25px;
@@ -344,10 +336,76 @@
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.08);
       width: fit-content;
-      margin: 0.5rem auto;
+      margin-top: 0.25rem;
     }
 
-    /* Button Panel */
+    /* Menu Selection Screen inside the Card */
+    .menu-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.03);
+      border-radius: 14px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .menu-games-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+
+    @media (max-width: 550px) {
+      .menu-games-list {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .game-select-card {
+      background: rgba(255,255,255,0.02);
+      border: 2px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .game-select-card.game1:hover {
+      border-color: var(--neon-blue);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .game-select-card.game2:hover {
+      border-color: var(--neon-green);
+      box-shadow: 0 0 15px rgba(57, 255, 20, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .game-select-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    
+    .game-select-card.game1 h3 { color: var(--neon-blue); }
+    .game-select-card.game2 h3 { color: var(--neon-green); }
+
+    .game-select-card p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.3;
+    }
+
+    /* Buttons Panel */
     .button-panel {
       display: flex;
       flex-direction: column;
@@ -363,7 +421,7 @@
       cursor: pointer;
       border: none;
       transition: all 0.2s ease;
-      font-size: 1rem;
+      font-size: 0.95rem;
     }
 
     .btn-primary {
@@ -470,17 +528,82 @@
       font-weight: bold;
     }
 
-    /* Metricas */
-    .metrics-panel {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
+    /* --- AUDIO EXPORTER PANEL --- */
+    .audio-exporter-card {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
     }
 
-    @media (max-width: 550px) {
-      .metrics-panel {
+    .audio-tracks-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.8rem;
+    }
+
+    @media (max-width: 650px) {
+      .audio-tracks-list {
         grid-template-columns: 1fr;
       }
+    }
+
+    .track-row {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .track-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .track-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--neon-gold);
+    }
+
+    .track-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .track-actions {
+      display: flex;
+      gap: 5px;
+    }
+
+    .btn-track {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 0.8rem;
+    }
+
+    .btn-track:hover {
+      background: var(--neon-blue);
+      color: #000;
+      border-color: var(--neon-blue);
+    }
+
+    .btn-download:hover {
+      background: var(--neon-green);
+      color: #000;
+      border-color: var(--neon-green);
     }
 
     /* Details and Connections */
@@ -533,12 +656,6 @@
       flex-direction: column;
       gap: 0.4rem;
     }
-
-    footer code {
-      background: rgba(255,255,255,0.03);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
   </style>
 </head>
 <body>
@@ -547,8 +664,8 @@
 
   <!-- Header -->
   <header>
-    <h1>JUEGO LED VERTICAL</h1>
-    <p>Simulador de Reflejos de Color para Tiras en Torre</p>
+    <h1>CONSOLA LED VERTICAL</h1>
+    <p>Simulador y Exportador de Sonidos de la Consola Multi-Juegos</p>
   </header>
 
   <!-- Game Layout: Tube (Left), Controls (Right) -->
@@ -560,13 +677,13 @@
       
       <div class="acrylic-tube">
         <!-- Target indicator bracket -->
-        <div class="target-bracket"></div>
+        <div class="target-overlay" id="target-bracket"></div>
         
         <!-- Markers of LED index -->
         <div class="tube-markers">
           <span>119 (Top)</span>
           <span>90</span>
-          <span>63 (Obj)</span>
+          <span>60</span>
           <span>30</span>
           <span>10</span>
           <span>0 (Bot)</span>
@@ -586,7 +703,7 @@
         <div class="dashboard-header">
           <div class="indicator-group">
             <div class="indicator-light active" id="power-light"></div>
-            <span style="font-weight: 600; font-size: 0.9rem;">ESP32 CONECTADO (SIMULADO)</span>
+            <span style="font-weight: 600; font-size: 0.9rem;">CONSOLA CONECTADA (SIM)</span>
           </div>
           <div class="sound-toggle-container active" id="sound-toggle" onclick="toggleSound()">
             <span>Audio Sintetizado</span>
@@ -596,9 +713,26 @@
           </div>
         </div>
 
-        <div style="margin-top: 1.2rem; display: flex; flex-direction: column; gap: 1.2rem;">
+        <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+          
+          <!-- Menu Select Display (Only visible when in STATE_MENU) -->
+          <div class="menu-screen" id="menu-screen">
+            <h2 style="font-size: 1.1rem; color: #fff;">SELECCIONA UN JUEGO</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Usa el mouse o presiona los botones indicados abajo:</p>
+            <div class="menu-games-list">
+              <div class="game-select-card game1" onclick="selectGame(1)">
+                <h3>Juego 1: Defender</h3>
+                <p>Protege la base de meteoritos de colores que caen a toda velocidad. (Pulsador Azul)</p>
+              </div>
+              <div class="game-select-card game2" onclick="selectGame(2)">
+                <h3>Juego 2: Runner</h3>
+                <p>Escala la torre cruzando barreras del color correcto a tiempo. (Pulsador Verde)</p>
+              </div>
+            </div>
+          </div>
+
           <!-- Score Grid -->
-          <div class="scores-grid">
+          <div class="scores-grid" id="scores-grid" style="display: none;">
             <div class="score-box">
               <div class="score-label">Puntos</div>
               <div class="score-value green" id="score-val">0</div>
@@ -613,37 +747,36 @@
             </div>
           </div>
 
+          <!-- Game details -->
           <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.15); padding: 0.8rem 1.2rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.03);">
             <div>
-              <div class="score-label" style="text-align: left;">Estado de Placa</div>
-              <div class="state-badge" id="state-badge" style="margin: 0.25rem 0 0 0;">STATE_IDLE</div>
+              <div class="score-label" style="text-align: left;">Estado General</div>
+              <div class="state-badge" id="state-badge">STATE_MENU</div>
             </div>
             <div style="text-align: right;">
-              <button class="btn btn-primary" onclick="triggerStart()">Iniciar Partida</button>
+              <button class="btn btn-secondary" onclick="returnToMenu()">Volver al Menú</button>
             </div>
           </div>
 
           <!-- Real-Time Metrics -->
-          <div class="metrics-panel">
-            <div class="score-box" style="text-align: left;">
-              <div class="score-label">Frecuencia de Paso</div>
-              <div style="font-size: 1.2rem; font-weight: 700; color: var(--neon-blue); margin-top: 4px; font-family: 'JetBrains Mono', monospace;" id="speed-val">120 ms</div>
+          <div class="scores-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="score-box" style="text-align: left; padding: 0.75rem 1rem;">
+              <div class="score-label">Frecuencia</div>
+              <div style="font-size: 1.1rem; font-weight: 700; color: var(--neon-blue); margin-top: 2px; font-family: 'JetBrains Mono', monospace;" id="speed-val">-- ms</div>
             </div>
-            <div class="score-box" style="text-align: left;">
-              <div class="score-label">Bola Actual</div>
-              <div style="font-size: 1.2rem; font-weight: 700; color: var(--text-muted); margin-top: 4px;" id="color-val">NINGUNA</div>
+            <div class="score-box" style="text-align: left; padding: 0.75rem 1rem;">
+              <div class="score-label">Acción Actual</div>
+              <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-muted); margin-top: 2px;" id="action-val">MENU</div>
             </div>
           </div>
+
         </div>
       </div>
 
       <!-- Controls card -->
       <div class="card button-panel">
-        <h2 style="font-size: 1.2rem; letter-spacing: -0.2px;">Pulsadores del Juego (Simulador)</h2>
-        <p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; max-width: 500px;">
-          Haz clic con el cursor o presiona los botones utilizando el teclado de tu computadora.
-        </p>
-
+        <h2 style="font-size: 1.1rem; letter-spacing: -0.2px;">Pulsadores de la Consola</h2>
+        
         <div class="physical-buttons">
           <button class="game-btn game-btn-blue" id="btn-blue" onmousedown="pressGameButton('blue')" onmouseup="releaseGameButton('blue')" onmouseleave="releaseGameButton('blue')">
             AZUL
@@ -662,20 +795,92 @@
         <div class="keyboard-guide">
           Teclado: <kbd>J</kbd> o <kbd>Z</kbd> (Azul) &nbsp;|&nbsp; <kbd>K</kbd> o <kbd>X</kbd> (Verde) &nbsp;|&nbsp; <kbd>L</kbd> o <kbd>C</kbd> (Rojo)
         </div>
-        
-        <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem;" onclick="resetHighScore()">Reiniciar Récord</button>
+      </div>
+
+      <!-- Sound Exporter Card -->
+      <div class="card audio-exporter-card">
+        <h2 style="font-size: 1.1rem; color: var(--neon-gold);">Generador de Sonidos para la MicroSD</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -0.5rem;">
+          Sintetiza y descarga las pistas de sonido en formato <strong>WAV</strong> para cargarlas directamente en tu tarjeta de memoria física.
+        </p>
+
+        <div class="audio-tracks-list">
+          <div class="track-row">
+            <div class="track-info">
+              <span class="track-name">0001.wav</span>
+              <span class="track-desc">Música de Espera / Menú</span>
+            </div>
+            <div class="track-actions">
+              <button class="btn-track" title="Escuchar" onclick="playTrack(1)">▶</button>
+              <button class="btn-track btn-download" title="Descargar WAV" onclick="downloadWav(1)">↓</button>
+            </div>
+          </div>
+
+          <div class="track-row">
+            <div class="track-info">
+              <span class="track-name">0002.wav</span>
+              <span class="track-desc">J1 - Acierto (Explosión)</span>
+            </div>
+            <div class="track-actions">
+              <button class="btn-track" title="Escuchar" onclick="playTrack(2)">▶</button>
+              <button class="btn-track btn-download" title="Descargar WAV" onclick="downloadWav(2)">↓</button>
+            </div>
+          </div>
+
+          <div class="track-row">
+            <div class="track-info">
+              <span class="track-name">0003.wav</span>
+              <span class="track-desc">J1 - Daño / Game Over</span>
+            </div>
+            <div class="track-actions">
+              <button class="btn-track" title="Escuchar" onclick="playTrack(3)">▶</button>
+              <button class="btn-track btn-download" title="Descargar WAV" onclick="downloadWav(3)">↓</button>
+            </div>
+          </div>
+
+          <div class="track-row">
+            <div class="track-info">
+              <span class="track-name">0004.wav</span>
+              <span class="track-desc">J2 - Impulso (Pase barrera)</span>
+            </div>
+            <div class="track-actions">
+              <button class="btn-track" title="Escuchar" onclick="playTrack(4)">▶</button>
+              <button class="btn-track btn-download" title="Descargar WAV" onclick="downloadWav(4)">↓</button>
+            </div>
+          </div>
+
+          <div class="track-row">
+            <div class="track-info">
+              <span class="track-name">0005.wav</span>
+              <span class="track-desc">J2 - Choque / Caída</span>
+            </div>
+            <div class="track-actions">
+              <button class="btn-track" title="Escuchar" onclick="playTrack(5)">▶</button>
+              <button class="btn-track btn-download" title="Descargar WAV" onclick="downloadWav(5)">↓</button>
+            </div>
+          </div>
+
+          <div class="track-row">
+            <div class="track-info">
+              <span class="track-name">0006.wav</span>
+              <span class="track-desc">J2 - Victoria / Fin de Nivel</span>
+            </div>
+            <div class="track-actions">
+              <button class="btn-track" title="Escuchar" onclick="playTrack(6)">▶</button>
+              <button class="btn-track btn-download" title="Descargar WAV" onclick="downloadWav(6)">↓</button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
 
   </div>
 
-  <!-- Connection and Hardware details -->
+  <!-- Connection Details -->
   <div class="details-grid">
-    
-    <!-- Schematic Diagram -->
     <div class="card">
-      <h2 style="margin-bottom: 0.8rem; color: var(--neon-blue); font-size: 1.2rem;">Conexiones Eléctricas (ESP32 DevKit V1)</h2>
+      <h2 style="margin-bottom: 0.8rem; color: var(--neon-blue); font-size: 1.1rem;">Conexiones Eléctricas (ESP32)</h2>
       <div class="diagram-box">
              CONEXIÓN CON UN SOLO CARGADOR DE 5V (Mínimo 3A / 15W)
 
@@ -697,42 +902,30 @@
                          │  GPIO12 (D12) ─┼─[ Botón ]──┘
                          │                │
                          │  GPIO16 (RX2) ─┼──────────── Pin TX (MP3-TF-16P)
-                         │  GPIO17 (TX2) ─┼───[1kΩ]──── Pin RX (MP3-TF-16P)**
+                         │  GPIO17 (TX2) ─┼───[1kΩ]──── Pin RX (MP3-TF-16P)
                          └────────────────┘
- * Nota: El cargador de 5V alimenta el ESP32 y los LEDs en paralelo. Nunca
-   alimentes la tira directamente desde el pin de 5V/VIN del ESP32.
- ** Nota: Resistencia de 1kΩ es clave para filtrar ruido en el MP3.
       </div>
     </div>
 
-    <!-- MicroSD and Arduino Steps -->
     <div class="card">
-      <h2 style="margin-bottom: 0.8rem; color: var(--neon-green); font-size: 1.2rem;">Estructura de Tarjeta MicroSD y Carga</h2>
+      <h2 style="margin-bottom: 0.8rem; color: var(--neon-green); font-size: 1.1rem;">Carga de Archivos en MicroSD</h2>
       <ul class="instructions-list">
         <li>
-          <strong>Estructura de Audio Actualizada (3 Archivos):</strong>
-          Formatea la tarjeta MicroSD en FAT32, crea la carpeta <code>MP3</code> e incluye solo estos archivos:
-          <br>• <code>/MP3/0001.mp3</code>: Música ambiental / espera (Bucle continuo).
-          <br>• <code>/MP3/0002.mp3</code>: Efecto de Acierto (Hit rápido).
-          <br>• <code>/MP3/0003.mp3</code>: Efecto de Fallo / Game Over.
+          <strong>Cómo cargar los sonidos:</strong> Descarga cada pista haciendo clic en el botón de descarga verde (<span style="color:var(--neon-green)">↓</span>) del panel superior.
         </li>
         <li>
-          <strong>Tira LED Vertical (Cuesta Arriba):</strong>
-          La bola de luz se genera en la base (píxel 10) y viaja verticalmente hacia la punta (píxel 119). Debes atraparla cuando cruce la zona objetivo (píxeles 60 a 66).
+          <strong>Formato:</strong> Las pistas se descargan como archivos `.wav` de 16 bits sin comprimir. Tu lector MP3-TF-16P V3.0 es compatible con WAV y MP3.
         </li>
         <li>
-          <strong>Carga del Código Físico:</strong>
-          Abre el archivo <a href="file:///Users/markantony/Desktop/juegoled/juegoled.ino" style="color: var(--neon-blue); text-decoration: underline;">juegoled.ino</a> en Arduino IDE. Instala las librerías <strong>Adafruit NeoPixel</strong> y <strong>DFRobotDFPlayerMini</strong> desde la biblioteca y súbelo a tu ESP32.
+          <strong>Nombres:</strong> Crea una carpeta llamada <code>MP3</code> en la raíz de tu tarjeta MicroSD (FAT32) y guarda los archivos con nombres de cuatro dígitos exactos:
+          <br><code>/MP3/0001.wav</code>, <code>/MP3/0002.wav</code>, <code>/MP3/0003.wav</code>, <code>/MP3/0004.wav</code>, <code>/MP3/0005.wav</code>, <code>/MP3/0006.wav</code>.
         </li>
       </ul>
     </div>
-
   </div>
 
-  <!-- Footer -->
   <footer>
-    <p>Simulador actualizado para la configuración de Tira Vertical y 3 pistas de audio en MicroSD.</p>
-    <p>Rutas locales: Código en <code>/Users/markantony/Desktop/juegoled/juegoled.ino</code> | Especificaciones en <code>/Users/markantony/Desktop/juegoled/configuracion_juego_led_esp32.md</code></p>
+    <p>Consola Multi-Juegos: <code>juegos-led-esp32</code> | Repositorio: <a href="https://github.com/marcmuni1975/juegos-led-esp32" target="_blank">marcmuni1975/juegos-led-esp32</a></p>
   </footer>
 
 </div>
@@ -743,25 +936,46 @@
   const NUM_LEDS = 120;
   const PLAY_AREA_START = 10;
   const PLAY_AREA_END = 119;
-  const TARGET_START = 60;
-  const TARGET_END = 66;
-  const INITIAL_SPEED = 120; // ms
-  const MIN_SPEED = 35; // ms
-  const SPEED_INCREMENT = 4; // ms
+  
+  // Juego 1: Defender
+  const SHIELD_START = 10;
+  const SHIELD_END = 18;
+  const MAX_METEORITES = 3;
+
+  // Juego 2: Runner
+  const NUM_GATES = 3;
 
   // --- VARIABLES DE ESTADO ---
-  let currentState = 'STATE_IDLE';
+  let currentState = 'STATE_MENU';
+  let selectedGame = 0; // 1: Defender, 2: Runner
   let score = 0;
   let lives = 3;
-  let highScore = parseInt(localStorage.getItem('juegoled_highscore')) || 0;
   
-  let ballPosition = PLAY_AREA_START;
-  let currentBallColor = 'blue'; // blue, green, red
-  let ballSpeed = INITIAL_SPEED;
-  let gameInterval = null;
+  let highScoreGame1 = parseInt(localStorage.getItem('juegoled_high1')) || 0;
+  let highScoreGame2 = parseInt(localStorage.getItem('juegoled_high2')) || 0;
+  
+  // Game 1 variables
+  let meteorites = [];
+  let lastMeteoriteSpawn = 0;
+  let lastMeteoriteMove = 0;
+  let spawnInterval = 2500; // ms
+  let meteoriteSpeed = 100; // ms
+
+  // Game 2 variables
+  let gates = [];
+  let runnerPosition = PLAY_AREA_START;
+  let lastRunnerMove = 0;
+  let runnerSpeed = 120; // ms
+  let isStoppedAtGate = false;
+  let currentGateIndex = -1;
+  let gateWaitTime = 0;
+
+  // Timer general del simulador
+  let mainInterval = null;
   let attractModeInterval = null;
   let attractHue = 0;
-  
+
+  // Audio sintetizado
   let audioEnabled = true;
   let audioContext = null;
   let bgMusicOsc = null;
@@ -769,14 +983,12 @@
   let bgMusicPlaying = false;
   let bgMusicInterval = null;
 
-  // --- BOTONES FÍSICOS ---
   const buttonsState = {
-    blue: { pin: 26, pressed: false },
-    green: { pin: 25, pressed: false },
-    red: { pin: 12, pressed: false }
+    blue: { pressed: false },
+    green: { pressed: false },
+    red: { pressed: false }
   };
 
-  // Inicialización de la tira en el DOM
   const ledStripContainer = document.getElementById('led-strip');
   const ledsElements = [];
 
@@ -786,36 +998,40 @@
       const led = document.createElement('div');
       led.classList.add('led');
       led.setAttribute('data-index', i);
-      
-      // Marcar visualmente la zona objetivo en la tira física
-      if (i >= TARGET_START && i <= TARGET_END) {
-        led.style.border = '1px solid rgba(255,255,255,0.3)';
-      }
-      
       ledStripContainer.appendChild(led);
       ledsElements.push(led);
     }
   }
 
-  // Actualizar display numérico
   function updateScoresUI() {
     document.getElementById('score-val').innerText = score;
     document.getElementById('lives-val').innerText = lives;
-    document.getElementById('record-val').innerText = highScore;
+    document.getElementById('record-val').innerText = selectedGame === 1 ? highScoreGame1 : selectedGame === 2 ? highScoreGame2 : '--';
     document.getElementById('state-badge').innerText = currentState;
-    
-    document.getElementById('speed-val').innerText = ballSpeed.toFixed(0) + ' ms';
-    document.getElementById('color-val').innerText = currentState === 'STATE_PLAYING' ? currentBallColor.toUpperCase() : 'NINGUNA';
-    
-    const colorValEl = document.getElementById('color-val');
-    if (currentState === 'STATE_PLAYING') {
-      colorValEl.style.color = currentBallColor === 'blue' ? 'var(--neon-blue)' : currentBallColor === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
+
+    if (currentState === 'STATE_MENU') {
+      document.getElementById('menu-screen').style.display = 'flex';
+      document.getElementById('scores-grid').style.display = 'none';
+      document.getElementById('speed-val').innerText = '-- ms';
+      document.getElementById('action-val').innerText = 'MENU';
+      document.getElementById('action-val').style.color = 'var(--text-muted)';
     } else {
-      colorValEl.style.color = 'var(--text-muted)';
+      document.getElementById('menu-screen').style.display = 'none';
+      document.getElementById('scores-grid').style.display = 'grid';
+      
+      if (selectedGame === 1) {
+        document.getElementById('speed-val').innerText = meteoriteSpeed.toFixed(0) + ' ms';
+        document.getElementById('action-val').innerText = 'DEFENSA';
+        document.getElementById('action-val').style.color = 'var(--neon-blue)';
+      } else {
+        document.getElementById('speed-val').innerText = runnerSpeed.toFixed(0) + ' ms';
+        document.getElementById('action-val').innerText = 'ESCALADA';
+        document.getElementById('action-val').style.color = 'var(--neon-green)';
+      }
     }
   }
 
-  // --- WEB AUDIO API SYNTHESIZER (Reflejando la estructura de 3 pistas) ---
+  // --- AUDIO SYNTHESIZER ---
   function initAudio() {
     if (!audioContext) {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -827,7 +1043,7 @@
     const btn = document.getElementById('sound-toggle');
     if (audioEnabled) {
       btn.classList.add('active');
-      if (currentState === 'STATE_IDLE' || currentState === 'STATE_PLAYING') {
+      if (currentState === 'STATE_MENU' || currentState === 'STATE_PLAYING') {
         playBgMusic();
       }
     } else {
@@ -836,84 +1052,131 @@
     }
   }
 
-  function playSynthSound(freqStart, freqEnd, type, duration, volume) {
+  // Sintetizador modular en tiempo real
+  function playSynth(freqStart, freqEnd, type, duration, volume, filterFreq) {
     if (!audioEnabled) return;
     initAudio();
-    
     try {
       const osc = audioContext.createOscillator();
       const gain = audioContext.createGain();
-      
+      let node = osc;
+
       osc.type = type;
       osc.frequency.setValueAtTime(freqStart, audioContext.currentTime);
       if (freqEnd && freqStart !== freqEnd) {
         osc.frequency.exponentialRampToValueAtTime(freqEnd, audioContext.currentTime + duration);
       }
-      
+
       gain.gain.setValueAtTime(volume, audioContext.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
-      
-      osc.connect(gain);
+
+      if (filterFreq) {
+        const filter = audioContext.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(filterFreq, audioContext.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(30, audioContext.currentTime + duration);
+        osc.connect(filter);
+        node = filter;
+      }
+
+      node.connect(gain);
       gain.connect(audioContext.destination);
-      
       osc.start();
       osc.stop(audioContext.currentTime + duration);
-    } catch (e) {
-      console.warn("Audio context user interaction needed.", e);
-    }
+    } catch (e) {}
   }
 
-  // Reproducir Pistas según SD física (1, 2, 3)
-  function playTrack(trackNumber) {
+  // Generador de Ruido Blanco para explosiones reales
+  function playNoise(duration, volume, lowPassFreq) {
     if (!audioEnabled) return;
-    
+    initAudio();
+    try {
+      const bufferSize = audioContext.sampleRate * duration;
+      const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      const noise = audioContext.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = audioContext.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(lowPassFreq, audioContext.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + duration);
+
+      const gain = audioContext.createGain();
+      gain.gain.setValueAtTime(volume, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioContext.destination);
+
+      noise.start();
+    } catch (e) {}
+  }
+
+  // Reproducción de pista
+  function playTrack(trackNumber) {
+    initAudio();
     switch (trackNumber) {
-      case 1: // /MP3/0001.mp3 -> Música de espera / loop de fondo
+      case 1: // Música del Menú (Ambient Arpeggio)
         playBgMusic();
         break;
-      case 2: // /MP3/0002.mp3 -> Sonido de Acierto (Hit)
-        playSynthSound(880, 1500, 'sine', 0.15, 0.2);
+      case 2: // J1 Acierto: Explosión láser realista
+        playNoise(0.4, 0.4, 1000);
+        playSynth(440, 110, 'sawtooth', 0.25, 0.25);
         break;
-      case 3: // /MP3/0003.mp3 -> Sonido de Fallo / Game Over (Miss / GameOver)
-        stopBgMusic();
-        // Zumbador descendente dramático
-        playSynthSound(220, 70, 'sawtooth', 0.6, 0.35);
+      case 3: // J1 Daño / GameOver: Sirena alarmista y distorsión
+        playSynth(300, 120, 'sawtooth', 0.6, 0.35, 800);
+        setTimeout(() => playSynth(280, 90, 'sawtooth', 0.6, 0.35, 800), 150);
+        break;
+      case 4: // J2 Acierto: Jet Boost ascendente brillante
+        playSynth(587.33, 1174.66, 'sine', 0.2, 0.25); // D5 -> D6
+        setTimeout(() => playSynth(880, 1760, 'sine', 0.2, 0.2), 60);
+        break;
+      case 5: // J2 Choque / Caída: Ruido de crash metálico chiptune
+        playNoise(0.2, 0.3, 2000);
+        playSynth(300, 80, 'triangle', 0.4, 0.3);
+        break;
+      case 6: // J2 Victoria: Fanfarria triunfal clásica
+        const tempo = 120;
+        const note = (freq, duration, delayTime) => {
+          setTimeout(() => playSynth(freq, freq, 'triangle', duration, 0.25), delayTime);
+        };
+        note(523.25, 0.15, 0);   // C5
+        note(659.25, 0.15, 120); // E5
+        note(783.99, 0.15, 240); // G5
+        note(1046.50, 0.35, 360); // C6
         break;
     }
   }
 
-  // Música ambiental sintetizada para Track 0001.mp3
+  // Música de Espera Sintetizada
   function playBgMusic() {
     if (!audioEnabled || bgMusicPlaying) return;
     initAudio();
-    
     try {
       bgMusicOsc = audioContext.createOscillator();
       bgMusicGain = audioContext.createGain();
-      
       bgMusicOsc.type = 'triangle';
       bgMusicOsc.frequency.setValueAtTime(130.81, audioContext.currentTime); // C3
-      
-      bgMusicGain.gain.setValueAtTime(0.05, audioContext.currentTime);
-      
+      bgMusicGain.gain.setValueAtTime(0.04, audioContext.currentTime);
       bgMusicOsc.connect(bgMusicGain);
       bgMusicGain.connect(audioContext.destination);
-      
       bgMusicOsc.start();
       bgMusicPlaying = true;
 
-      // Secuencia armónica simple
-      let notes = [130.81, 146.83, 164.81, 196.00];
+      let notes = [130.81, 196.00, 261.63, 329.63, 392.00, 329.63, 261.63, 196.00];
       let idx = 0;
       bgMusicInterval = setInterval(() => {
         if (!bgMusicPlaying) return;
         idx = (idx + 1) % notes.length;
         bgMusicOsc.frequency.setValueAtTime(notes[idx], audioContext.currentTime);
-      }, 700);
-
-    } catch (e) {
-      console.warn("Audio context interaction issue", e);
-    }
+      }, 350);
+    } catch(e){}
   }
 
   function stopBgMusic() {
@@ -931,118 +1194,333 @@
     }
   }
 
-  // --- LÓGICA DE CONTROL DE LA TIRA LED VERTICAL ---
+  // --- AUDIO OFFLINE RENDER & WAV EXPORTER ---
+  // Función helper de codificación WAV PCM de 16 bits
+  function bufferToWav(buffer) {
+    let numOfChan = buffer.numberOfChannels,
+        length = buffer.length * numOfChan * 2 + 44,
+        bufferArr = new ArrayBuffer(length),
+        view = new DataView(bufferArr),
+        channels = [], i, sample,
+        offset = 0,
+        pos = 0;
+
+    const setUint16 = (data) => { view.setUint16(pos, data, true); pos += 2; };
+    const setUint32 = (data) => { view.setUint32(pos, data, true); pos += 4; };
+
+    setUint32(0x46464952);                         // "RIFF"
+    setUint32(length - 8);                         // File size - 8
+    setUint32(0x45564157);                         // "WAVE"
+    setUint32(0x20746d66);                         // "fmt "
+    setUint32(16);                                 // Chunk length
+    setUint16(1);                                  // Format PCM (1)
+    setUint16(numOfChan);                          // Channel count
+    setUint32(buffer.sampleRate);                  // Sample rate
+    setUint32(buffer.sampleRate * 2 * numOfChan);  // Byte rate
+    setUint16(numOfChan * 2);                      // Block align
+    setUint16(16);                                 // Bits per sample
+    setUint32(0x61746164);                         // "data"
+    setUint32(length - pos - 4);                   // Chunk size
+
+    for (i = 0; i < numOfChan; i++) {
+      channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < length - 4) {
+      for (i = 0; i < numOfChan; i++) {
+        sample = Math.max(-1, Math.min(1, channels[i][offset]));
+        sample = (sample < 0 ? sample * 0x8000 : sample * 0x7FFF);
+        view.setInt16(pos, sample, true);
+        pos += 2;
+      }
+      offset++;
+    }
+
+    return new Blob([bufferArr], {type: "audio/wav"});
+  }
+
+  // Generación Offline de cada sonido
+  function generateOfflineTrack(trackNumber, callback) {
+    const sampleRate = 44100;
+    let duration = 0.5;
+    if (trackNumber === 1) duration = 2.8; // Menú loop
+    else if (trackNumber === 3) duration = 0.8; // Daño
+    else if (trackNumber === 6) duration = 1.0; // Victoria
+
+    const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, sampleRate * duration, sampleRate);
+
+    // Sintetizar dentro de offlineCtx
+    if (trackNumber === 1) {
+      // Melodía de fondo
+      let osc = offlineCtx.createOscillator();
+      let gain = offlineCtx.createGain();
+      osc.type = 'triangle';
+      
+      let notes = [130.81, 196.00, 261.63, 329.63, 392.00, 329.63, 261.63, 196.00];
+      let step = duration / notes.length;
+      for (let i = 0; i < notes.length; i++) {
+        osc.frequency.setValueAtTime(notes[i], i * step);
+      }
+      
+      gain.gain.setValueAtTime(0.2, 0);
+      gain.gain.exponentialRampToValueAtTime(0.001, duration);
+      
+      osc.connect(gain);
+      gain.connect(offlineCtx.destination);
+      osc.start(0);
+      osc.stop(duration);
+
+    } else if (trackNumber === 2) {
+      // J1 Acierto: Explosión (Ruido + Oscilador)
+      // Generar ruido blanco en offline
+      const bufferSize = sampleRate * 0.4;
+      const noiseBuffer = offlineCtx.createBuffer(1, bufferSize, sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noise = offlineCtx.createBufferSource();
+      noise.buffer = noiseBuffer;
+
+      const filter = offlineCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1000, 0);
+      filter.frequency.exponentialRampToValueAtTime(40, 0.4);
+
+      const gain = offlineCtx.createGain();
+      gain.gain.setValueAtTime(0.35, 0);
+      gain.gain.exponentialRampToValueAtTime(0.001, 0.4);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(offlineCtx.destination);
+      noise.start(0);
+
+      // Oscilador de apoyo
+      let osc = offlineCtx.createOscillator();
+      let oscGain = offlineCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, 0);
+      osc.frequency.exponentialRampToValueAtTime(110, 0.25);
+      oscGain.gain.setValueAtTime(0.25, 0);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, 0.25);
+      osc.connect(oscGain);
+      oscGain.connect(offlineCtx.destination);
+      osc.start(0);
+      osc.stop(0.25);
+
+    } else if (trackNumber === 3) {
+      // J1 Daño: Alarma distorsionada descendente
+      let osc1 = offlineCtx.createOscillator();
+      let gain1 = offlineCtx.createGain();
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(300, 0);
+      osc1.frequency.exponentialRampToValueAtTime(120, 0.6);
+      gain1.gain.setValueAtTime(0.3, 0);
+      gain1.gain.exponentialRampToValueAtTime(0.001, 0.6);
+      osc1.connect(gain1);
+      gain1.connect(offlineCtx.destination);
+      osc1.start(0);
+      osc1.stop(0.6);
+
+      let osc2 = offlineCtx.createOscillator();
+      let gain2 = offlineCtx.createGain();
+      osc2.type = 'sawtooth';
+      osc2.frequency.setValueAtTime(280, 0.15);
+      osc2.frequency.exponentialRampToValueAtTime(90, 0.75);
+      gain2.gain.setValueAtTime(0.3, 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, 0.75);
+      osc2.connect(gain2);
+      gain2.connect(offlineCtx.destination);
+      osc2.start(0.15);
+      osc2.stop(0.75);
+
+    } else if (trackNumber === 4) {
+      // J2 Impulso: Arpegio ascendente brillante
+      let osc1 = offlineCtx.createOscillator();
+      let gain1 = offlineCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, 0);
+      osc1.frequency.setValueAtTime(1174.66, 0.12);
+      gain1.gain.setValueAtTime(0.25, 0);
+      gain1.gain.exponentialRampToValueAtTime(0.001, 0.25);
+      osc1.connect(gain1);
+      gain1.connect(offlineCtx.destination);
+      osc1.start(0);
+      osc1.stop(0.25);
+
+      let osc2 = offlineCtx.createOscillator();
+      let gain2 = offlineCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880, 0.06);
+      osc2.frequency.setValueAtTime(1760, 0.18);
+      gain2.gain.setValueAtTime(0.2, 0.06);
+      gain2.gain.exponentialRampToValueAtTime(0.001, 0.25);
+      osc2.connect(gain2);
+      gain2.connect(offlineCtx.destination);
+      osc2.start(0.06);
+      osc2.stop(0.25);
+
+    } else if (trackNumber === 5) {
+      // J2 Choque: Crash de metal
+      const bufferSize = sampleRate * 0.2;
+      const noiseBuffer = offlineCtx.createBuffer(1, bufferSize, sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      const noise = offlineCtx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const filter = offlineCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2000, 0);
+      const gain = offlineCtx.createGain();
+      gain.gain.setValueAtTime(0.3, 0);
+      gain.gain.exponentialRampToValueAtTime(0.001, 0.2);
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(offlineCtx.destination);
+      noise.start(0);
+
+      let osc = offlineCtx.createOscillator();
+      let oscGain = offlineCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(300, 0);
+      osc.frequency.exponentialRampToValueAtTime(80, 0.4);
+      oscGain.gain.setValueAtTime(0.25, 0);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, 0.4);
+      osc.connect(oscGain);
+      oscGain.connect(offlineCtx.destination);
+      osc.start(0);
+      osc.stop(0.4);
+
+    } else if (trackNumber === 6) {
+      // J2 Victoria: Fanfarria alegre
+      let osc = offlineCtx.createOscillator();
+      let gain = offlineCtx.createGain();
+      osc.type = 'triangle';
+      
+      const playNote = (freq, time, len) => {
+        osc.frequency.setValueAtTime(freq, time);
+        gain.gain.setValueAtTime(0.25, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + len);
+      };
+      
+      playNote(523.25, 0.0, 0.12);
+      playNote(659.25, 0.12, 0.12);
+      playNote(783.99, 0.24, 0.12);
+      playNote(1046.50, 0.36, 0.4);
+      
+      osc.connect(gain);
+      gain.connect(offlineCtx.destination);
+      osc.start(0);
+      osc.stop(duration);
+    }
+
+    offlineCtx.startRendering().then(renderedBuffer => {
+      callback(renderedBuffer);
+    });
+  }
+
+  // Descarga del WAV
+  function downloadWav(trackNumber) {
+    initAudio();
+    generateOfflineTrack(trackNumber, (buffer) => {
+      const wavBlob = bufferToWav(buffer);
+      const url = URL.createObjectURL(wavBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Guardar con nombre de 4 dígitos exactos para DFPlayer
+      const name = String(trackNumber).padStart(4, '0') + '.wav';
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  }
+
+
+  // --- ANIMACIONES Y MÁQUINA DE ESTADOS DEL SIMULADOR ---
+
   function clearLeds() {
     ledsElements.forEach(led => {
-      led.style.background = '#11111a';
+      led.style.background = '#111118';
       led.style.boxShadow = 'none';
     });
   }
 
-  // Dibujar estado en la tira vertical
-  function drawGameLeds() {
-    clearLeds();
+  // 1. MENU STATE - Parpadeo de menú en LEDs
+  function startMenuAnimation() {
+    stopAllLoops();
+    playTrack(1); // Música de espera
 
-    // 1. Dibujar Vidas en la base (LEDs 0, 1, 2)
-    for (let i = 0; i < 3; i++) {
-      if (i < lives) {
-        ledsElements[i].style.background = 'var(--neon-green)';
-        ledsElements[i].style.boxShadow = '0 0 8px var(--neon-green)';
-      } else {
-        ledsElements[i].style.background = 'var(--neon-red)';
-        ledsElements[i].style.boxShadow = '0 0 8px var(--neon-red)';
-      }
-    }
-    // LED 3 separador apagado
-    ledsElements[3].style.background = '#000';
-
-    // 2. Dibujar Zona Objetivo (LEDs 60 a 66) en blanco
-    for (let i = TARGET_START; i <= TARGET_END; i++) {
-      ledsElements[i].style.background = 'rgba(255, 255, 255, 0.25)';
-      ledsElements[i].style.boxShadow = 'inset 0 0 2px rgba(255,255,255,0.4)';
-    }
-
-    // 3. Dibujar la bola con blur de movimiento ascendente
-    if (currentState === 'STATE_PLAYING') {
-      const pos = Math.floor(ballPosition);
-      const colorHex = currentBallColor === 'blue' ? 'var(--neon-blue)' : currentBallColor === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
-      
-      if (pos >= PLAY_AREA_START && pos <= PLAY_AREA_END) {
-        // Pixel Central
-        ledsElements[pos].style.background = colorHex;
-        ledsElements[pos].style.boxShadow = `0 0 12px ${colorHex}, 0 0 4px #fff`;
-
-        // Pixeles de cola/blur (movimiento ascendente, así que la cola está abajo: pos - 1, pos - 2)
-        if (pos - 1 >= PLAY_AREA_START) {
-          ledsElements[pos - 1].style.background = getTranslucentColor(currentBallColor, 0.5);
-        }
-        if (pos - 2 >= PLAY_AREA_START) {
-          ledsElements[pos - 2].style.background = getTranslucentColor(currentBallColor, 0.2);
-        }
-        if (pos + 1 <= PLAY_AREA_END) {
-          ledsElements[pos + 1].style.background = getTranslucentColor(currentBallColor, 0.3);
-        }
-      }
-    }
-  }
-
-  function getTranslucentColor(color, opacity) {
-    if (color === 'blue') return `rgba(0, 240, 255, ${opacity})`;
-    if (color === 'green') return `rgba(57, 255, 20, ${opacity})`;
-    return `rgba(255, 0, 85, ${opacity})`;
-  }
-
-  // Generar nueva bola
-  function generateNewBall() {
-    ballPosition = PLAY_AREA_START;
-    const colors = ['blue', 'green', 'red'];
-    currentBallColor = colors[Math.floor(Math.random() * colors.length)];
-  }
-
-  // --- MÁQUINA DE ESTADOS ---
-
-  // 1. IDLE TICK (Rainbow)
-  function startIdleAnimation() {
-    stopGameLoops();
-    playTrack(1); // Música ambiental
-    
     attractHue = 0;
+    let pulseVal = 0;
+    let ascending = true;
+
     attractModeInterval = setInterval(() => {
-      attractHue = (attractHue + 2) % 360;
-      
-      for (let i = 0; i < NUM_LEDS; i++) {
-        const pixelHue = (attractHue + (i * 3)) % 360;
-        ledsElements[i].style.background = `hsl(${pixelHue}, 90%, 25%)`;
-        ledsElements[i].style.boxShadow = `0 0 4px hsl(${pixelHue}, 90%, 25%)`;
+      if (ascending) {
+        pulseVal += 4;
+        if (pulseVal >= 120) ascending = false;
+      } else {
+        pulseVal -= 4;
+        if (pulseVal <= 20) ascending = true;
       }
-      
-      // LEDs base parpadeantes de color para invitar a jugar
-      ledsElements[0].style.background = 'var(--neon-blue)';
-      ledsElements[0].style.boxShadow = '0 0 10px var(--neon-blue)';
-      ledsElements[1].style.background = 'var(--neon-green)';
-      ledsElements[1].style.boxShadow = '0 0 10px var(--neon-green)';
-      ledsElements[2].style.background = 'var(--neon-red)';
-      ledsElements[2].style.boxShadow = '0 0 10px var(--neon-red)';
-      
-    }, 45);
+
+      clearLeds();
+
+      // Indicadores en la base en blanco tenue
+      ledsElements[0].style.background = 'rgba(255,255,255,0.15)';
+      ledsElements[1].style.background = 'rgba(255,255,255,0.15)';
+      ledsElements[2].style.background = 'rgba(255,255,255,0.15)';
+
+      // Indicador Juego 1 (Azul, inferior)
+      for (let i = 15; i <= 25; i++) {
+        ledsElements[i].style.background = `rgba(0, 0, ${pulseVal}, 0.8)`;
+        ledsElements[i].style.boxShadow = `0 0 8px rgba(0, 0, ${pulseVal}, 0.5)`;
+      }
+
+      // Indicador Juego 2 (Verde, superior)
+      for (let i = 85; i <= 95; i++) {
+        ledsElements[i].style.background = `rgba(0, ${pulseVal}, 0, 0.8)`;
+        ledsElements[i].style.boxShadow = `0 0 8px rgba(0, ${pulseVal}, 0, 0.5)`;
+      }
+    }, 25);
   }
 
-  // 2. INICIO
+  function selectGame(gameId) {
+    selectedGame = gameId;
+    triggerStart();
+  }
+
+  // 2. START STATE
   function triggerStart() {
-    initAudio();
-    stopGameLoops();
-    
+    stopAllLoops();
     currentState = 'STATE_START';
     updateScoresUI();
-    playTrack(1); // Reiniciar/Asegurar la música loop de fondo
+    playTrack(1); // Asegurar música de fondo activa
 
-    // Destellos rápidos
+    // Visual de bracket del objetivo
+    const bracket = document.getElementById('target-bracket');
+    if (selectedGame === 1) {
+      // Bracket en la base (Escudo LEDs 10-18)
+      bracket.style.bottom = '55px';
+      bracket.style.height = '62px';
+      bracket.style.borderColor = 'var(--neon-blue)';
+      bracket.setAttribute('style', 'bottom: 55px; height: 62px; border-color: var(--neon-blue);');
+    } else {
+      // Bracket en el centro (No hay bracket rígido o marcamos las zonas completas en JS)
+      bracket.style.borderColor = 'rgba(255,255,255,0.15)';
+      bracket.setAttribute('style', 'display: none;'); // Desactivar bracket para Juego 2 ya que tiene 3 barreras distintas
+    }
+
+    // Flashes rápidos del color de juego
+    const colorHex = (selectedGame === 1) ? 'var(--neon-blue)' : 'var(--neon-green)';
     let flashCount = 0;
     const flashInterval = setInterval(() => {
       if (flashCount % 2 === 0) {
         ledsElements.forEach(led => {
-          led.style.background = 'rgba(255,255,255,0.8)';
-          led.style.boxShadow = '0 0 12px #fff';
+          led.style.background = colorHex;
+          led.style.boxShadow = `0 0 10px ${colorHex}`;
         });
       } else {
         clearLeds();
@@ -1052,123 +1530,338 @@
         clearInterval(flashInterval);
         startGameplay();
       }
-    }, 150);
+    }, 120);
   }
 
-  // 3. JUEGO ACTIVO
+  // 3. PLAYING STATE
   function startGameplay() {
     currentState = 'STATE_PLAYING';
     score = 0;
     lives = 3;
-    ballSpeed = INITIAL_SPEED;
-    generateNewBall();
     updateScoresUI();
 
-    gameInterval = setInterval(gameStep, ballSpeed);
+    if (selectedGame === 1) {
+      // Iniciar Juego 1
+      meteorites = [];
+      spawnInterval = 2500;
+      meteoriteSpeed = 100;
+      lastMeteoriteSpawn = Date.now();
+      lastMeteoriteMove = Date.now();
+      
+      // Meteorito inicial
+      spawnMeteorite();
+      mainInterval = setInterval(game1Loop, 15);
+    } else {
+      // Iniciar Juego 2
+      runnerPosition = PLAY_AREA_START;
+      runnerSpeed = 120;
+      isStoppedAtGate = false;
+      lastRunnerMove = Date.now();
+      
+      // Crear barreras
+      gates = [
+        { startPos: 35, endPos: 37, color: 'blue', active: true },
+        { startPos: 65, endPos: 67, color: 'green', active: true },
+        { startPos: 95, endPos: 97, color: 'red', active: true }
+      ];
+      randomizeGates();
+
+      mainInterval = setInterval(game2Loop, 15);
+    }
   }
 
-  function gameStep() {
-    if (currentState !== 'STATE_PLAYING') return;
+  // --- LOGICA BUCLE JUEGO 1: DEFENDER ---
+  function spawnMeteorite() {
+    const colors = ['blue', 'green', 'red'];
+    meteorites.push({
+      position: PLAY_AREA_END,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      active: true
+    });
+  }
 
-    ballPosition += 1;
-    
-    // Si la bola sale por arriba (LED 119) -> FALLO
-    if (ballPosition > PLAY_AREA_END) {
-      triggerMiss();
-      return;
+  function game1Loop() {
+    if (currentState !== 'STATE_PLAYING') return;
+    const now = Date.now();
+
+    // Dificultad dinámica
+    spawnInterval = Math.max(1000, 2500 - (score * 80));
+    meteoriteSpeed = Math.max(35, 100 - (score * 3));
+
+    // Generar
+    if (now - lastMeteoriteSpawn >= spawnInterval) {
+      lastMeteoriteSpawn = now;
+      spawnMeteorite();
     }
 
-    drawGameLeds();
+    // Desplazar meteoritos
+    if (now - lastMeteoriteMove >= meteoriteSpeed) {
+      lastMeteoriteMove = now;
+      for (let i = 0; i < meteorites.length; i++) {
+        if (meteorites[i].active) {
+          meteorites[i].position -= 1;
+          
+          // Si llega a la base (píxel 10) sin defender
+          if (meteorites[i].position < PLAY_AREA_START) {
+            meteorites[i].active = false;
+            triggerMiss();
+            return;
+          }
+        }
+      }
+    }
+
+    // Dibujar en Tira LED
+    clearLeds();
+    
+    // Vidas
+    for (let i = 0; i < 3; i++) {
+      ledsElements[i].style.background = (i < lives) ? 'var(--neon-green)' : 'var(--neon-red)';
+      ledsElements[i].style.boxShadow = `0 0 8px ${(i < lives) ? 'var(--neon-green)' : 'var(--neon-red)'}`;
+    }
+    ledsElements[3].style.background = '#000';
+
+    // Zona de Escudo (blanco suave)
+    for (let i = SHIELD_START; i <= SHIELD_END; i++) {
+      ledsElements[i].style.background = 'rgba(255,255,255,0.18)';
+      ledsElements[i].style.boxShadow = 'inset 0 0 2px rgba(255,255,255,0.3)';
+    }
+
+    // Meteoritos
+    for (let i = 0; i < meteorites.length; i++) {
+      if (meteorites[i].active) {
+        const pos = Math.floor(meteorites[i].position);
+        const colHex = meteorites[i].color === 'blue' ? 'var(--neon-blue)' : meteorites[i].color === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
+        
+        if (pos >= PLAY_AREA_START && pos <= PLAY_AREA_END) {
+          ledsElements[pos].style.background = colHex;
+          ledsElements[pos].style.boxShadow = `0 0 10px ${colHex}`;
+          // Estela
+          if (pos + 1 <= PLAY_AREA_END) {
+            ledsElements[pos + 1].style.background = getTranslucentColor(meteorites[i].color, 0.4);
+          }
+        }
+      }
+    }
+
     updateScoresUI();
   }
 
-  // 4. ACIERTO
+  // --- LOGICA BUCLE JUEGO 2: RUNNER ---
+  function randomizeGates() {
+    const colors = ['blue', 'green', 'red'];
+    gates.forEach(gate => {
+      gate.color = colors[Math.floor(Math.random() * colors.length)];
+      gate.active = true;
+    });
+  }
+
+  function game2Loop() {
+    if (currentState !== 'STATE_PLAYING') return;
+    const now = Date.now();
+
+    runnerSpeed = Math.max(35, 120 - (score * 5));
+
+    // Desplazar corredor
+    if (!isStoppedAtGate) {
+      if (now - lastRunnerMove >= runnerSpeed) {
+        lastRunnerMove = now;
+        runnerPosition += 1;
+
+        // Victoria de Nivel (Completar ascenso)
+        if (runnerPosition >= PLAY_AREA_END) {
+          triggerStageClear();
+          return;
+        }
+
+        // Comprobar colisión con barreras
+        for (let i = 0; i < gates.length; i++) {
+          if (gates[i].active && (Math.floor(runnerPosition) + 1 >= gates[i].startPos)) {
+            isStoppedAtGate = true;
+            currentGateIndex = i;
+            gateWaitTime = now;
+            break;
+          }
+        }
+      }
+    } else {
+      // Si pasa demasiado tiempo detenido en la barrera (1.5 segundos) -> Choque
+      if (now - gateWaitTime > 1500) {
+        isStoppedAtGate = false;
+        triggerMiss();
+        return;
+      }
+    }
+
+    // Dibujar en Tira LED
+    clearLeds();
+
+    // Vidas
+    for (let i = 0; i < 3; i++) {
+      ledsElements[i].style.background = (i < lives) ? 'var(--neon-green)' : 'var(--neon-red)';
+      ledsElements[i].style.boxShadow = `0 0 8px ${(i < lives) ? 'var(--neon-green)' : 'var(--neon-red)'}`;
+    }
+    ledsElements[3].style.background = '#000';
+
+    // Barreras
+    gates.forEach(gate => {
+      if (gate.active) {
+        const colHex = gate.color === 'blue' ? 'var(--neon-blue)' : gate.color === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
+        for (let p = gate.startPos; p <= gate.endPos; p++) {
+          ledsElements[p].style.background = colHex;
+          ledsElements[p].style.boxShadow = `0 0 8px ${colHex}`;
+        }
+      }
+    });
+
+    // Corredor (Blanco)
+    const runPos = Math.floor(runnerPosition);
+    if (runPos >= PLAY_AREA_START && runPos <= PLAY_AREA_END) {
+      ledsElements[runPos].style.background = '#fff';
+      ledsElements[runPos].style.boxShadow = '0 0 12px #fff, 0 0 4px var(--neon-blue)';
+      // Estela
+      if (runPos - 1 >= PLAY_AREA_START) {
+        ledsElements[runPos - 1].style.background = 'rgba(255,255,255,0.4)';
+      }
+      if (runPos - 2 >= PLAY_AREA_START) {
+        ledsElements[runPos - 2].style.background = 'rgba(255,255,255,0.15)';
+      }
+    }
+
+    updateScoresUI();
+  }
+
+  // --- CONTROL DE HIT Y MISS ---
+  
+  // Acierto exitoso
   function triggerHit() {
     currentState = 'STATE_HIT';
     score++;
-    playTrack(2); // Sonido hit
-
-    // Aceleración gradual
-    ballSpeed = Math.max(MIN_SPEED, ballSpeed - SPEED_INCREMENT);
     updateScoresUI();
 
-    const colorHex = currentBallColor === 'blue' ? 'var(--neon-blue)' : currentBallColor === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
-    let flashIndex = 0;
-    
-    clearInterval(gameInterval);
-
-    // Destello de acierto en la zona objetivo
-    const hitFlash = setInterval(() => {
-      for (let i = TARGET_START; i <= TARGET_END; i++) {
-        ledsElements[i].style.background = flashIndex % 2 === 0 ? colorHex : 'transparent';
-        ledsElements[i].style.boxShadow = flashIndex % 2 === 0 ? `0 0 20px ${colorHex}` : 'none';
-      }
-      flashIndex++;
-      if (flashIndex >= 6) {
-        clearInterval(hitFlash);
-        
-        generateNewBall();
-        currentState = 'STATE_PLAYING';
-        updateScoresUI();
-        gameInterval = setInterval(gameStep, ballSpeed);
-      }
-    }, 55);
+    if (selectedGame === 1) {
+      playTrack(2); // Explosión
+      currentState = 'STATE_PLAYING';
+    } else {
+      playTrack(4); // Impulso
+      // Avance extra
+      runnerPosition = Math.min(PLAY_AREA_END, runnerPosition + 4);
+      currentState = 'STATE_PLAYING';
+    }
   }
 
-  // 5. FALLO
+  // Choque o impacto (Fallo)
   function triggerMiss() {
     currentState = 'STATE_MISS';
     lives--;
-    playTrack(3); // Sonido de fallo
-    
     updateScoresUI();
-    clearInterval(gameInterval);
+    clearInterval(mainInterval);
 
-    // Destello Rojo de fallo en la zona de objetivo
-    let flashIndex = 0;
-    const missFlash = setInterval(() => {
-      for (let i = TARGET_START; i <= TARGET_END; i++) {
-        ledsElements[i].style.background = flashIndex % 2 === 0 ? 'var(--neon-red)' : 'transparent';
-        ledsElements[i].style.boxShadow = flashIndex % 2 === 0 ? '0 0 20px var(--neon-red)' : 'none';
-      }
-      flashIndex++;
-      if (flashIndex >= 6) {
-        clearInterval(missFlash);
+    // Sonido
+    if (selectedGame === 1) {
+      playTrack(3); // Alarma / Daño
+    } else {
+      playTrack(5); // Choque
+      // Retroceder
+      runnerPosition = Math.max(PLAY_AREA_START, runnerPosition - 15);
+    }
+
+    // Flash rojo de daño
+    let flash = 0;
+    const damageFlash = setInterval(() => {
+      ledsElements.forEach(led => {
+        led.style.background = (flash % 2 === 0) ? 'var(--neon-red)' : '#111118';
+        led.style.boxShadow = (flash % 2 === 0) ? '0 0 10px var(--neon-red)' : 'none';
+      });
+      flash++;
+      if (flash >= 4) {
+        clearInterval(damageFlash);
         
         if (lives <= 0) {
           triggerGameOver();
         } else {
-          // Continuar con música
-          playTrack(1);
-          generateNewBall();
+          // Reanudar juego
+          playTrack(1); // Volver a asegurar música
+          if (selectedGame === 1) {
+            lastMeteoriteSpawn = Date.now();
+            lastMeteoriteMove = Date.now();
+            mainInterval = setInterval(game1Loop, 15);
+          } else {
+            isStoppedAtGate = false;
+            lastRunnerMove = Date.now();
+            mainInterval = setInterval(game2Loop, 15);
+          }
           currentState = 'STATE_PLAYING';
-          updateScoresUI();
-          gameInterval = setInterval(gameStep, ballSpeed);
         }
       }
-    }, 110);
+    }, 100);
   }
 
-  // 6. FIN DE JUEGO (GAME OVER)
+  // Juego 2: Victoria de Piso
+  function triggerStageClear() {
+    currentState = 'STATE_HIT';
+    score += 5; // Bonus
+    updateScoresUI();
+    clearInterval(mainInterval);
+    playTrack(6); // Melodía de victoria
+
+    // Destellos dorados festivos
+    let flash = 0;
+    const victoryFlash = setInterval(() => {
+      ledsElements.forEach(led => {
+        led.style.background = (flash % 2 === 0) ? 'var(--neon-gold)' : 'transparent';
+        led.style.boxShadow = (flash % 2 === 0) ? '0 0 12px var(--neon-gold)' : 'none';
+      });
+      flash++;
+      if (flash >= 6) {
+        clearInterval(victoryFlash);
+        
+        // Reiniciar posición y barreras
+        runnerPosition = PLAY_AREA_START;
+        randomizeGates();
+        isStoppedAtGate = false;
+        
+        playTrack(1); // Reiniciar/Asegurar música
+        lastRunnerMove = Date.now();
+        mainInterval = setInterval(game2Loop, 15);
+        currentState = 'STATE_PLAYING';
+      }
+    }, 120);
+  }
+
+  // Game Over
   function triggerGameOver() {
     currentState = 'STATE_GAMEOVER';
-    stopGameLoops();
-    
+    stopAllLoops();
+
     let isNewRecord = false;
-    if (score > highScore) {
-      highScore = score;
-      localStorage.setItem('juegoled_highscore', highScore);
-      isNewRecord = true;
+    if (selectedGame === 1) {
+      playTrack(3); // Sonido trágico
+      if (score > highScoreGame1) {
+        highScoreGame1 = score;
+        localStorage.setItem('juegoled_high1', highScoreGame1);
+        isNewRecord = true;
+      }
+    } else {
+      playTrack(5); // Sonido trágico
+      if (score > highScoreGame2) {
+        highScoreGame2 = score;
+        localStorage.setItem('juegoled_high2', highScoreGame2);
+        isNewRecord = true;
+      }
+    }
+
+    if (isNewRecord) {
+      setTimeout(() => playTrack(6), 400); // Celebración
     }
 
     updateScoresUI();
-    playTrack(3); // Sonido de fallo (como sonido de fin de juego)
 
-    // Renderizar puntajes acumulados en la tira
+    // Renderizar puntajes en la tira
     attractModeInterval = setInterval(() => {
       clearLeds();
       
-      // Barra de score amarilla ascendente
+      // Barra dorada de score
       const scoreLimit = Math.min(score, 100);
       for (let i = 0; i < scoreLimit; i++) {
         ledsElements[i + 10].style.background = 'var(--neon-gold)';
@@ -1176,19 +1869,20 @@
       }
 
       // Récord anterior en magenta parpadeante
-      const recordPos = Math.min(highScore, 100) + 10;
+      const recVal = selectedGame === 1 ? highScoreGame1 : highScoreGame2;
+      const recordPos = Math.min(recVal, 100) + 10;
       if (Math.floor(Date.now() / 300) % 2 === 0) {
         ledsElements[recordPos].style.background = 'var(--neon-magenta)';
         ledsElements[recordPos].style.boxShadow = '0 0 10px var(--neon-magenta)';
       }
 
-      // Tres LEDs rojos en la base para vidas perdidas
+      // Tres LEDs rojos en la base
       for (let i = 0; i < 3; i++) {
         ledsElements[i].style.background = 'var(--neon-red)';
         ledsElements[i].style.boxShadow = '0 0 6px var(--neon-red)';
       }
 
-      // Destellos blancos para nuevo récord
+      // Destellos blancos si es récord
       if (isNewRecord && Math.floor(Date.now() / 150) % 2 === 0) {
         for (let i = 0; i < 10; i++) {
           ledsElements[i].style.background = '#fff';
@@ -1198,8 +1892,16 @@
     }, 100);
   }
 
-  function stopGameLoops() {
-    if (gameInterval) clearInterval(gameInterval);
+  function returnToMenu() {
+    stopAllLoops();
+    currentState = 'STATE_MENU';
+    selectedGame = 0;
+    updateScoresUI();
+    startMenuAnimation();
+  }
+
+  function stopAllLoops() {
+    if (mainInterval) clearInterval(mainInterval);
     if (attractModeInterval) clearInterval(attractModeInterval);
     stopBgMusic();
   }
@@ -1212,25 +1914,52 @@
     const el = document.getElementById(`btn-${color}`);
     if (el) el.classList.add('active');
 
-    if (currentState === 'STATE_PLAYING') {
-      const pos = Math.floor(ballPosition);
-      const insideTarget = (pos >= TARGET_START && pos <= TARGET_END);
-      
-      if (insideTarget) {
-        if (currentBallColor === color) {
-          triggerHit();
-        } else {
-          triggerMiss();
+    // Procesar Lógica
+    if (currentState === 'STATE_MENU') {
+      if (color === 'blue') selectGame(1);
+      else if (color === 'green') selectGame(2);
+    } 
+    else if (currentState === 'STATE_PLAYING') {
+      if (selectedGame === 1) {
+        // Juego 1: Defender
+        // Buscar si hay meteorito de este color en el escudo
+        let hitFound = false;
+        for (let i = 0; i < meteorites.length; i++) {
+          if (meteorites[i].active && meteorites[i].color === color) {
+            const pos = Math.floor(meteorites[i].position);
+            if (pos >= SHIELD_START && pos <= SHIELD_END) {
+              meteorites[i].active = false;
+              triggerHit();
+              hitFound = true;
+              break;
+            }
+          }
         }
-      } else {
-        triggerMiss();
+        // Si pulsa el botón pero no había meteorito de ese color en el escudo
+        if (!hitFound) {
+          // Opcionalmente penalizar o no hacer nada (preferimos no hacer nada para mejor fluidez)
+        }
+      } 
+      else {
+        // Juego 2: Runner
+        if (isStoppedAtGate && currentGateIndex !== -1) {
+          if (gates[currentGateIndex].color === color) {
+            gates[currentGateIndex].active = false;
+            isStoppedAtGate = false;
+            triggerHit();
+          } else {
+            // Color incorrecto
+            isStoppedAtGate = false;
+            triggerMiss();
+          }
+        } else {
+          // Pulsación al vacío: penalizar haciéndolo caer un poco
+          runnerPosition = Math.max(PLAY_AREA_START, runnerPosition - 3);
+        }
       }
-    } else if (currentState === 'STATE_IDLE') {
-      triggerStart();
-    } else if (currentState === 'STATE_GAMEOVER') {
-      currentState = 'STATE_IDLE';
-      startIdleAnimation();
-      updateScoresUI();
+    } 
+    else if (currentState === 'STATE_GAMEOVER') {
+      returnToMenu();
     }
   }
 
@@ -1240,7 +1969,7 @@
     if (el) el.classList.remove('active');
   }
 
-  // Mapear teclado físico
+  // Eventos de teclado
   window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (key === 'j' || key === 'z') pressGameButton('blue');
@@ -1256,17 +1985,18 @@
   });
 
   function resetHighScore() {
-    localStorage.removeItem('juegoled_highscore');
-    highScore = 0;
+    localStorage.removeItem('juegoled_high1');
+    localStorage.removeItem('juegoled_high2');
+    highScoreGame1 = 0;
+    highScoreGame2 = 0;
     updateScoresUI();
-    playSynthSound(150, 150, 'sawtooth', 0.25, 0.1);
+    playSynth(150, 150, 'sawtooth', 0.2, 0.1);
   }
 
-  // --- CARGA DE PÁGINA ---
   window.onload = () => {
     initLeds();
     updateScoresUI();
-    startIdleAnimation();
+    startMenuAnimation();
   };
 </script>
 
