@@ -1,6 +1,6 @@
 /**
  * ==================================================================================
- * PROYECTO: CONSOLA MULTI-JUEGOS LED VERTICAL
+ * PROYECTO: CONSOLA DE 4 JUEGOS ARCADE LED VERTICAL
  * Placa: ESP32 DevKit V1
  * Tira LED: SK6812 RGBW (120 LEDs, Data Pin: GPIO 13)
  * Botones: Azul (GPIO 26), Verde (GPIO 25), Rojo (GPIO 12) - Activos en LOW
@@ -21,7 +21,7 @@
 #define MP3_RX       16  // Conectado al TX del módulo MP3
 #define MP3_TX       17  // Conectado al RX del módulo MP3
 
-#define PIN_LED      13  // Pin de datos para la tira SK6812 (resistencia 330Ω)
+#define PIN_LED      13  // Pin de datos para la tira SK6812 (con resistencia 330Ω)
 #define NUM_LEDS     120
 
 // --- PARÁMETROS GENERALES ---
@@ -84,10 +84,12 @@ Button btnRed   = {BOTON_ROJO, HIGH, HIGH, 0, false};
 
 // Variables generales de la consola
 GameState currentState = STATE_MENU;
-int selectedGame = 0; // 1: Defender, 2: Runner
+int selectedGame = 1; // 1: Defender, 2: Runner, 3: Stacker, 4: Simon
 int score = 0;
 int highScoreGame1 = 0;
 int highScoreGame2 = 0;
+int highScoreGame3 = 0;
+int highScoreGame4 = 0;
 int lives = 3;
 
 // --- VARIABLES ESPECÍFICAS DE JUEGOS ---
@@ -99,20 +101,43 @@ int lives = 3;
 Meteorite meteorites[MAX_METEORITES];
 unsigned long lastMeteoriteSpawn = 0;
 unsigned long lastMeteoriteMove = 0;
-unsigned long spawnInterval = 2500; // ms
-unsigned long meteoriteSpeed = 100; // ms por paso
+unsigned long spawnInterval = 2500;
+unsigned long meteoriteSpeed = 100;
 
 // Juego 2: Runner
 #define NUM_GATES 3
 Gate gates[NUM_GATES];
 float runnerPosition = PLAY_AREA_START;
 unsigned long lastRunnerMove = 0;
-unsigned long runnerSpeed = 120; // ms por paso
-unsigned long gateWaitTime = 0;  // Tiempo de espera en la barrera actual
+unsigned long runnerSpeed = 120;
 bool isStoppedAtGate = false;
 int currentGateIndex = -1;
+unsigned long gateWaitTime = 0;
 
-// Variables generales
+// Juego 3: LED Stacker
+int targetStart = 55;
+int targetEnd = 65; // Ancho inicial 11 LEDs en el centro
+int blockWidth = 11;
+float stackerPosition = PLAY_AREA_START;
+bool stackerDirectionUp = true;
+unsigned long lastStackerMove = 0;
+unsigned long stackerSpeed = 60; // ms por paso
+
+// Juego 4: Simon Says
+#define SIMON_MAX_LENGTH 32
+enum SimonSubState {
+  SIMON_SHOW,
+  SIMON_INPUT
+};
+SimonSubState simonState = SIMON_SHOW;
+int simonSequence[SIMON_MAX_LENGTH];
+int simonLength = 0;
+int simonIndex = 0;
+unsigned long simonTimer = 0;
+int simonShowIndex = 0;
+bool simonShowOn = false;
+
+// Variables generales de timers
 unsigned long stateTimer = 0;
 bool hasAudio = false;
 
@@ -122,18 +147,23 @@ void playSound(int track);
 void drawGame();
 uint32_t getColorRGBW(BallColor color, uint8_t brightness);
 
-// Inicializadores de juegos
+// Inicializadores
 void initGame1();
 void initGame2();
+void initGame3();
+void initGame4();
 void spawnMeteorite();
 void handleGame1Playing();
 void handleGame2Playing();
+void handleGame3Playing();
+void handleGame4Playing();
+void showSimonSequence();
 
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("--- Iniciando Consola LED Vertical ---"));
+  Serial.println(F("--- Iniciando Consola Multi-Juegos 4-en-1 ---"));
 
-  // Configurar pines de botones
+  // Configurar botones
   pinMode(btnBlue.pin, INPUT_PULLUP);
   pinMode(btnGreen.pin, INPUT_PULLUP);
   pinMode(btnRed.pin, INPUT_PULLUP);
@@ -142,34 +172,32 @@ void setup() {
   strip.begin();
   strip.show();
 
-  // Cargar Récords desde memoria persistente
+  // Cargar Récords
   preferences.begin("consolaled", false);
   highScoreGame1 = preferences.getInt("highscore1", 0);
   highScoreGame2 = preferences.getInt("highscore2", 0);
-  Serial.print(F("Record Juego 1: ")); Serial.println(highScoreGame1);
-  Serial.print(F("Record Juego 2: ")); Serial.println(highScoreGame2);
+  highScoreGame3 = preferences.getInt("highscore3", 0);
+  highScoreGame4 = preferences.getInt("highscore4", 0);
 
-  // Inicializar Reproductor MP3
+  // Inicializar MP3
   Serial2.begin(9600, SERIAL_8N1, MP3_RX, MP3_TX);
   if (myDFPlayer.begin(Serial2)) {
     hasAudio = true;
-    myDFPlayer.volume(18); // Volumen 0-30
+    myDFPlayer.volume(18);
     delay(500);
-    playSound(1); // Iniciar melodía de fondo en el menú
+    playSound(1); // Melodía del menú principal
   } else {
-    Serial.println(F("ADVERTENCIA: MP3 no conectado."));
+    Serial.println(F("ADVERTENCIA: Módulo MP3 no detectado."));
   }
 
   randomSeed(analogRead(0));
 }
 
 void loop() {
-  // Escanear botones
   updateButton(btnBlue);
   updateButton(btnGreen);
   updateButton(btnRed);
 
-  // Máquina de estados
   switch (currentState) {
     case STATE_MENU:
       handleMenu();
@@ -180,6 +208,8 @@ void loop() {
     case STATE_PLAYING:
       if (selectedGame == 1) handleGame1Playing();
       else if (selectedGame == 2) handleGame2Playing();
+      else if (selectedGame == 3) handleGame3Playing();
+      else if (selectedGame == 4) handleGame4Playing();
       break;
     case STATE_HIT:
       handleHit();
@@ -193,7 +223,7 @@ void loop() {
   }
 }
 
-// --- ACTUALIZACIÓN DE BOTONES (FILTRO ANTIRREBOTE) ---
+// --- ACTUALIZACIÓN DE BOTONES CON DEBOUNCE ---
 void updateButton(Button &btn) {
   bool reading = digitalRead(btn.pin);
   btn.pressed = false;
@@ -220,7 +250,7 @@ void playSound(int track) {
   }
 }
 
-// --- COLOR RGBW ---
+// --- RETORNAR COLOR RGBW ---
 uint32_t getColorRGBW(BallColor color, uint8_t brightness) {
   uint16_t b = brightness;
   switch (color) {
@@ -232,34 +262,39 @@ uint32_t getColorRGBW(BallColor color, uint8_t brightness) {
 }
 
 // ==================================================================================
-// CONTROLADOR DE MENÚ Y ESTADOS DE CONSOLA
+// CONTROLADOR DE MENÚ PRINCIPAL NAVEGABLE (3 BOTONES)
 // ==================================================================================
 
-// 1. MODO SELECCIÓN DE JUEGO
 void handleMenu() {
   static unsigned long lastMenuTick = 0;
   static int pulseVal = 0;
   static bool ascending = true;
 
-  // Botón Azul = Selecciona Juego 1
+  // Botón Azul = Subir cursor
   if (btnBlue.pressed) {
-    selectedGame = 1;
-    currentState = STATE_START;
-    return;
+    selectedGame--;
+    if (selectedGame < 1) selectedGame = 4;
+    playSound(10); // Tono de navegación
   }
-  // Botón Verde = Selecciona Juego 2
+  // Botón Rojo = Bajar cursor
+  if (btnRed.pressed) {
+    selectedGame++;
+    if (selectedGame > 4) selectedGame = 1;
+    playSound(12); // Tono de navegación
+  }
+  // Botón Verde = Seleccionar/Confirmar
   if (btnGreen.pressed) {
-    selectedGame = 2;
+    playSound(11); // Tono de confirmación
     currentState = STATE_START;
     return;
   }
 
-  // Animación del menú (parpadeo de las zonas de menú en la tira)
+  // Animación del menú
   if (millis() - lastMenuTick > 20) {
     lastMenuTick = millis();
     if (ascending) {
       pulseVal += 4;
-      if (pulseVal >= 120) ascending = false;
+      if (pulseVal >= 130) ascending = false;
     } else {
       pulseVal -= 4;
       if (pulseVal <= 20) ascending = true;
@@ -267,32 +302,40 @@ void handleMenu() {
 
     strip.clear();
     
-    // Iluminar la base (vidas) en blanco para indicar sistema encendido
-    strip.setPixelColor(0, strip.Color(0, 0, 0, 30));
-    strip.setPixelColor(1, strip.Color(0, 0, 0, 30));
-    strip.setPixelColor(2, strip.Color(0, 0, 0, 30));
+    // LEDs de vidas fijos
+    strip.setPixelColor(0, strip.Color(0, 0, 0, 15));
+    strip.setPixelColor(1, strip.Color(0, 0, 0, 15));
+    strip.setPixelColor(2, strip.Color(0, 0, 0, 15));
 
-    // Indicador Juego 1 (Azul, parte inferior)
-    for (int i = 15; i <= 25; i++) {
-      strip.setPixelColor(i, strip.Color(0, 0, pulseVal, 0));
-    }
+    // Juego 1: LEDs 15-25 (Azul)
+    int j1Val = (selectedGame == 1) ? pulseVal : 10;
+    for (int i = 15; i <= 25; i++) strip.setPixelColor(i, strip.Color(0, 0, j1Val, 0));
 
-    // Indicador Juego 2 (Verde, parte superior)
-    for (int i = 85; i <= 95; i++) {
-      strip.setPixelColor(i, strip.Color(0, pulseVal, 0, 0));
-    }
+    // Juego 2: LEDs 45-55 (Verde)
+    int j2Val = (selectedGame == 2) ? pulseVal : 10;
+    for (int i = 45; i <= 55; i++) strip.setPixelColor(i, strip.Color(0, j2Val, 0, 0));
+
+    // Juego 3: LEDs 75-85 (Rojo)
+    int j3Val = (selectedGame == 3) ? pulseVal : 10;
+    for (int i = 75; i <= 85; i++) strip.setPixelColor(i, strip.Color(j3Val, 0, 0, 0));
+
+    // Juego 4: LEDs 105-115 (Magenta)
+    int j4Val = (selectedGame == 4) ? pulseVal : 10;
+    for (int i = 105; i <= 115; i++) strip.setPixelColor(i, strip.Color(j4Val, 0, j4Val, 0));
 
     strip.show();
   }
 }
 
-// 2. INICIO DE JUEGO - Cuenta regresiva
+// 2. INICIO DE JUEGO
 void handleStart() {
-  Serial.print(F("Iniciando Juego: "));
-  Serial.println(selectedGame);
+  uint32_t flashCol = strip.Color(0, 0, 0, 120);
+  if (selectedGame == 1) flashCol = strip.Color(0, 0, 150, 0);
+  else if (selectedGame == 2) flashCol = strip.Color(0, 150, 0, 0);
+  else if (selectedGame == 3) flashCol = strip.Color(150, 0, 0, 0);
+  else if (selectedGame == 4) flashCol = strip.Color(150, 0, 150, 0);
 
-  // Destello inicial de confirmación
-  uint32_t flashCol = (selectedGame == 1) ? strip.Color(0, 0, 150, 0) : strip.Color(0, 150, 0, 0);
+  // Destello de inicio
   for (int f = 0; f < 3; f++) {
     strip.fill(flashCol);
     strip.show();
@@ -305,50 +348,52 @@ void handleStart() {
   score = 0;
   lives = 3;
 
-  if (selectedGame == 1) {
-    initGame1();
-  } else {
-    initGame2();
-  }
+  if (selectedGame == 1) initGame1();
+  else if (selectedGame == 2) initGame2();
+  else if (selectedGame == 3) initGame3();
+  else if (selectedGame == 4) initGame4();
 
-  // Reproducir melodía ambiental / loop
-  playSound(1);
-
+  playSound(1); // Reproducir melodía ambiental
   currentState = STATE_PLAYING;
 }
 
 // 3. ACIERTO (HIT)
 void handleHit() {
   score++;
-  Serial.print(F("¡Acierto! Score: ")); Serial.println(score);
 
   if (selectedGame == 1) {
-    playSound(2); // Explosión
-    // El juego 1 reanuda directo
+    playSound(2);
     currentState = STATE_PLAYING;
-  } else {
-    playSound(4); // Impulso
-    // Para el juego 2, le damos un avance rápido hacia arriba como premio
+  } 
+  else if (selectedGame == 2) {
+    playSound(4);
     runnerPosition += 4.0;
     if (runnerPosition > PLAY_AREA_END) runnerPosition = PLAY_AREA_END;
+    currentState = STATE_PLAYING;
+  } 
+  else if (selectedGame == 3) {
+    playSound(7); // Encaje
+    currentState = STATE_PLAYING;
+  } 
+  else if (selectedGame == 4) {
+    playSound(13); // Nivel de Simon superado
     currentState = STATE_PLAYING;
   }
 }
 
-// 4. DAÑO O CHOQUE (MISS)
+// 4. FALLO / DAÑO (MISS)
 void handleMiss() {
   lives--;
-  Serial.print(F("¡Daño recibido! Vidas: ")); Serial.println(lives);
 
-  if (selectedGame == 1) {
-    playSound(3); // Daño
-  } else {
-    playSound(5); // Choque
-    // Retroceder corredor
+  if (selectedGame == 1) playSound(3);
+  else if (selectedGame == 2) {
+    playSound(5);
     runnerPosition = max((float)PLAY_AREA_START, runnerPosition - 15.0f);
   }
+  else if (selectedGame == 3) playSound(8); // Corte/Miss
+  else if (selectedGame == 4) playSound(14); // Simon Fallo
 
-  // Flash rojo de daño
+  // Destello rojo de daño
   for (int f = 0; f < 2; f++) {
     strip.fill(strip.Color(180, 0, 0, 0));
     strip.show();
@@ -377,27 +422,22 @@ void handleGameOver() {
   if (!saved) {
     saved = true;
     
-    // Sonido según el juego
+    // Asignación de sonidos de derrota y guardado de récords
     if (selectedGame == 1) {
-      playSound(3); // Sonido trágico Juego 1
-      if (score > highScoreGame1) {
-        highScoreGame1 = score;
-        preferences.putInt("highscore1", highScoreGame1);
-        isNewRecord = true;
-        playSound(2); // Sonido celebración
-      }
-    } else {
-      playSound(5); // Sonido trágico Juego 2
-      if (score > highScoreGame2) {
-        highScoreGame2 = score;
-        preferences.putInt("highscore2", highScoreGame2);
-        isNewRecord = true;
-        playSound(4); // Sonido celebración
-      }
+      playSound(3);
+      if (score > highScoreGame1) { highScoreGame1 = score; preferences.putInt("highscore1", highScoreGame1); isNewRecord = true; }
+    } else if (selectedGame == 2) {
+      playSound(5);
+      if (score > highScoreGame2) { highScoreGame2 = score; preferences.putInt("highscore2", highScoreGame2); isNewRecord = true; }
+    } else if (selectedGame == 3) {
+      playSound(8);
+      if (score > highScoreGame3) { highScoreGame3 = score; preferences.putInt("highscore3", highScoreGame3); isNewRecord = true; }
+    } else if (selectedGame == 4) {
+      playSound(14);
+      if (score > highScoreGame4) { highScoreGame4 = score; preferences.putInt("highscore4", highScoreGame4); isNewRecord = true; }
     }
   }
 
-  // Mostrar estadísticas
   strip.clear();
 
   // Barra dorada de score
@@ -406,8 +446,13 @@ void handleGameOver() {
     strip.setPixelColor(i + 10, strip.Color(100, 80, 0, 0));
   }
 
-  // Marca de Récord
-  int recVal = (selectedGame == 1) ? highScoreGame1 : highScoreGame2;
+  // Mostrar marca de récord
+  int recVal = 0;
+  if (selectedGame == 1) recVal = highScoreGame1;
+  else if (selectedGame == 2) recVal = highScoreGame2;
+  else if (selectedGame == 3) recVal = highScoreGame3;
+  else if (selectedGame == 4) recVal = highScoreGame4;
+
   int recPos = min(recVal, 100) + 10;
   if ((millis() / 300) % 2 == 0) {
     strip.setPixelColor(recPos, strip.Color(120, 0, 120, 0)); // Magenta
@@ -420,9 +465,8 @@ void handleGameOver() {
 
   strip.show();
 
-  // Pulsar cualquier botón para volver al Menú Principal
   if (btnBlue.pressed || btnGreen.pressed || btnRed.pressed) {
-    playSound(1); // Sonido menú
+    playSound(1);
     saved = false;
     isNewRecord = false;
     currentState = STATE_MENU;
@@ -432,10 +476,8 @@ void handleGameOver() {
 
 
 // ==================================================================================
-// LÓGICA DE JUEGOS INDIVIDUALES
+// JUEGO 1: COLOR SHIELD DEFENDER
 // ==================================================================================
-
-// --- JUEGO 1: COLOR SHIELD DEFENDER ---
 
 void initGame1() {
   spawnInterval = 2500;
@@ -455,7 +497,6 @@ void spawnMeteorite() {
       meteorites[i].position = PLAY_AREA_END;
       meteorites[i].color = (BallColor)random(0, COLOR_COUNT);
       meteorites[i].active = true;
-      Serial.print(F("Meteorito generado en slot: ")); Serial.println(i);
       break;
     }
   }
@@ -464,50 +505,41 @@ void spawnMeteorite() {
 void handleGame1Playing() {
   unsigned long now = millis();
 
-  // 1. Dificultad dinámica según score
   spawnInterval = max(1000UL, 2500UL - (score * 80UL));
   meteoriteSpeed = max(35UL, 100UL - (score * 3UL));
 
-  // 2. Generar meteoritos
   if (now - lastMeteoriteSpawn >= spawnInterval) {
     lastMeteoriteSpawn = now;
     spawnMeteorite();
   }
 
-  // 3. Desplazar meteoritos hacia abajo
   if (now - lastMeteoriteMove >= meteoriteSpeed) {
     lastMeteoriteMove = now;
     for (int i = 0; i < MAX_METEORITES; i++) {
       if (meteorites[i].active) {
         meteorites[i].position -= 1.0;
-        
-        // Si impacta la base del juego (LED 10)
         if (meteorites[i].position < PLAY_AREA_START) {
           meteorites[i].active = false;
-          currentState = STATE_MISS; // ¡Fallo!
+          currentState = STATE_MISS;
           return;
         }
       }
     }
   }
 
-  // 4. Evaluar pulsaciones de botones
   if (btnBlue.pressed || btnGreen.pressed || btnRed.pressed) {
-    // Determinar qué color se pulsó
     BallColor pressedColor = COLOR_BLUE;
     if (btnGreen.pressed) pressedColor = COLOR_GREEN;
     else if (btnRed.pressed) pressedColor = COLOR_RED;
 
-    // Buscar si hay algún meteorito del color correcto en la zona del escudo
     for (int i = 0; i < MAX_METEORITES; i++) {
       if (meteorites[i].active && meteorites[i].color == pressedColor) {
         int pos = (int)meteorites[i].position;
         if (pos >= SHIELD_START && pos <= SHIELD_END) {
-          // ¡Destruido!
           meteorites[i].active = false;
           currentState = STATE_HIT;
           
-          // Efecto de explosión rápida en la zona
+          // Explosión
           for (int e = 0; e < 3; e++) {
             strip.setPixelColor(pos, strip.Color(255, 255, 255, 255));
             if (pos-1 >= PLAY_AREA_START) strip.setPixelColor(pos-1, getColorRGBW(pressedColor, 180));
@@ -521,26 +553,21 @@ void handleGame1Playing() {
     }
   }
 
-  // 5. Renderizar Tira LED
   strip.clear();
 
-  // Vidas
   for (int i = 0; i < 3; i++) {
     strip.setPixelColor(i, (i < lives) ? strip.Color(0, 50, 0, 0) : strip.Color(50, 0, 0, 0));
   }
   strip.setPixelColor(3, strip.Color(0, 0, 0, 0));
 
-  // Dibujar zona del escudo blanca translúcida (LEDs 10 a 18)
   for (int i = SHIELD_START; i <= SHIELD_END; i++) {
     strip.setPixelColor(i, strip.Color(0, 0, 0, 20));
   }
 
-  // Dibujar meteoritos activos
   for (int i = 0; i < MAX_METEORITES; i++) {
     if (meteorites[i].active) {
       int pos = (int)meteorites[i].position;
       strip.setPixelColor(pos, getColorRGBW(meteorites[i].color, 220));
-      // Estela
       if (pos + 1 <= PLAY_AREA_END) {
         strip.setPixelColor(pos + 1, getColorRGBW(meteorites[i].color, 60));
       }
@@ -551,7 +578,9 @@ void handleGame1Playing() {
 }
 
 
-// --- JUEGO 2: COLOR DASH RUNNER ---
+// ==================================================================================
+// JUEGO 2: COLOR DASH RUNNER
+// ==================================================================================
 
 void initGame2() {
   runnerPosition = PLAY_AREA_START;
@@ -559,12 +588,10 @@ void initGame2() {
   isStoppedAtGate = false;
   lastRunnerMove = millis();
 
-  // Inicializar posiciones de las 3 barreras de color
   gates[0] = {35, 37, COLOR_BLUE, true};
   gates[1] = {65, 67, COLOR_GREEN, true};
   gates[2] = {95, 97, COLOR_RED, true};
 
-  // Aleatorizar los colores de las barreras
   for (int i = 0; i < NUM_GATES; i++) {
     gates[i].color = (BallColor)random(0, COLOR_COUNT);
     gates[i].active = true;
@@ -573,22 +600,16 @@ void initGame2() {
 
 void handleGame2Playing() {
   unsigned long now = millis();
-
-  // Dificultad basada en score (velocidad de ascenso del corredor)
   runnerSpeed = max(35UL, 120UL - (score * 5UL));
 
-  // 1. Movimiento del corredor
   if (!isStoppedAtGate) {
     if (now - lastRunnerMove >= runnerSpeed) {
       lastRunnerMove = now;
       runnerPosition += 1.0;
 
-      // Llegar a la cima (Victoria de piso)
       if (runnerPosition >= PLAY_AREA_END) {
-        playSound(6); // Sonido Victoria
-        score += 5;   // Puntos bonus
-        
-        // Destello de victoria
+        playSound(6); // Victoria
+        score += 5;
         for (int i = 0; i < 4; i++) {
           strip.fill(strip.Color(0, 0, 0, 180));
           strip.show();
@@ -598,7 +619,6 @@ void handleGame2Playing() {
           delay(80);
         }
         
-        // Reiniciar posición y barreras
         runnerPosition = PLAY_AREA_START;
         for (int i = 0; i < NUM_GATES; i++) {
           gates[i].color = (BallColor)random(0, COLOR_COUNT);
@@ -608,20 +628,16 @@ void handleGame2Playing() {
         return;
       }
 
-      // Comprobar colisión con barreras activas
       for (int i = 0; i < NUM_GATES; i++) {
         if (gates[i].active && (runnerPosition + 1 >= gates[i].startPos)) {
-          // Detener corredor
           isStoppedAtGate = true;
           currentGateIndex = i;
-          gateWaitTime = millis();
-          Serial.print(F("Corredor detenido en barrera: ")); Serial.println(i);
+          gateWaitTime = now;
           break;
         }
       }
     }
   } else {
-    // Si se detiene y pasa demasiado tiempo sin pulsar (1.5 segundos) -> Choque/Fallo
     if (now - gateWaitTime > 1500) {
       isStoppedAtGate = false;
       currentState = STATE_MISS;
@@ -629,39 +645,32 @@ void handleGame2Playing() {
     }
   }
 
-  // 2. Comprobar pulsaciones
   if (btnBlue.pressed || btnGreen.pressed || btnRed.pressed) {
     BallColor pressedColor = COLOR_BLUE;
     if (btnGreen.pressed) pressedColor = COLOR_GREEN;
     else if (btnRed.pressed) pressedColor = COLOR_RED;
 
     if (isStoppedAtGate && currentGateIndex != -1) {
-      // Si pulsa el color correcto de la barrera
       if (gates[currentGateIndex].color == pressedColor) {
         gates[currentGateIndex].active = false;
         isStoppedAtGate = false;
         currentState = STATE_HIT;
       } else {
-        // Equivocación de botón -> Choque
         isStoppedAtGate = false;
         currentState = STATE_MISS;
       }
     } else {
-      // Pulsar sin haber barrera activa adelante (Se penaliza con pequeña caída)
       runnerPosition = max((float)PLAY_AREA_START, runnerPosition - 3.0f);
     }
   }
 
-  // 3. Renderizar Tira LED
   strip.clear();
 
-  // Vidas
   for (int i = 0; i < 3; i++) {
     strip.setPixelColor(i, (i < lives) ? strip.Color(0, 50, 0, 0) : strip.Color(50, 0, 0, 0));
   }
   strip.setPixelColor(3, strip.Color(0, 0, 0, 0));
 
-  // Dibujar barreras activas
   for (int i = 0; i < NUM_GATES; i++) {
     if (gates[i].active) {
       for (int p = gates[i].startPos; p <= gates[i].endPos; p++) {
@@ -670,17 +679,251 @@ void handleGame2Playing() {
     }
   }
 
-  // Dibujar corredor (Blanco cálido de 3 LEDs)
   int runPos = (int)runnerPosition;
   if (runPos >= PLAY_AREA_START && runPos <= PLAY_AREA_END) {
-    strip.setPixelColor(runPos, strip.Color(0, 0, 0, 200)); // Centro blanco puro
-    if (runPos - 1 >= PLAY_AREA_START) {
-      strip.setPixelColor(runPos - 1, strip.Color(0, 0, 0, 80)); // Cola
+    strip.setPixelColor(runPos, strip.Color(0, 0, 0, 200));
+    if (runPos - 1 >= PLAY_AREA_START) strip.setPixelColor(runPos - 1, strip.Color(0, 0, 0, 80));
+    if (runPos - 2 >= PLAY_AREA_START) strip.setPixelColor(runPos - 2, strip.Color(0, 0, 0, 30));
+  }
+
+  strip.show();
+}
+
+
+// ==================================================================================
+// JUEGO 3: LED STACKER
+// ==================================================================================
+
+void initGame3() {
+  targetStart = 52;
+  targetEnd = 62; // Ancho inicial de 11 LEDs
+  blockWidth = 11;
+  stackerPosition = PLAY_AREA_START;
+  stackerDirectionUp = true;
+  stackerSpeed = 65;
+  lastStackerMove = millis();
+}
+
+void handleGame3Playing() {
+  unsigned long now = millis();
+
+  // Velocidad de movimiento del bloque oscilante
+  stackerSpeed = max(25UL, 65UL - (score * 3UL));
+
+  // 1. Movimiento del bloque de arriba a abajo
+  if (now - lastStackerMove >= stackerSpeed) {
+    lastStackerMove = now;
+    if (stackerDirectionUp) {
+      stackerPosition += 1.0;
+      if (stackerPosition + blockWidth - 1 >= PLAY_AREA_END) {
+        stackerDirectionUp = false;
+      }
+    } else {
+      stackerPosition -= 1.0;
+      if (stackerPosition <= PLAY_AREA_START) {
+        stackerDirectionUp = true;
+      }
     }
-    if (runPos - 2 >= PLAY_AREA_START) {
-      strip.setPixelColor(runPos - 2, strip.Color(0, 0, 0, 30));
+  }
+
+  // 2. Comprobar disparo/fijación (Botón Verde)
+  // El botón verde fija la posición de la barra
+  if (btnBlue.pressed || btnGreen.pressed || btnRed.pressed) {
+    int stopStart = (int)stackerPosition;
+    int stopEnd = stopStart + blockWidth - 1;
+
+    // Calcular solapamiento con el objetivo [targetStart, targetEnd]
+    int newStart = max(stopStart, targetStart);
+    int newEnd = min(stopEnd, targetEnd);
+
+    if (newEnd >= newStart) {
+      // ¡Acierto! Se actualiza la zona de apilado
+      targetStart = newStart;
+      targetEnd = newEnd;
+      blockWidth = targetEnd - targetStart + 1;
+
+      // Destello de acierto en el bloque encajado
+      for (int f = 0; f < 3; f++) {
+        for (int p = targetStart; p <= targetEnd; p++) {
+          strip.setPixelColor(p, (f % 2 == 0) ? strip.Color(120, 100, 0, 0) : strip.Color(0, 0, 0, 0));
+        }
+        strip.show();
+        delay(40);
+      }
+
+      // Comprobar victoria (Bloque muy pequeño o llegó a dificultad extrema)
+      if (blockWidth <= 1 || score >= 20) {
+        playSound(9); // Fanfarria Victoria Stacker
+        // Destello de victoria total
+        for (int f = 0; f < 5; f++) {
+          strip.fill(strip.Color(0, 0, 0, 200));
+          strip.show();
+          delay(80);
+          strip.clear();
+          strip.show();
+          delay(80);
+        }
+        currentState = STATE_GAMEOVER;
+        return;
+      }
+
+      currentState = STATE_HIT;
+    } else {
+      // ¡Fallo! No hubo coincidencia (la barra se cayó completa)
+      currentState = STATE_MISS;
+      if (lives <= 0) return;
+    }
+  }
+
+  // 3. Renderizar tira LED
+  strip.clear();
+
+  // Vidas
+  for (int i = 0; i < 3; i++) {
+    strip.setPixelColor(i, (i < lives) ? strip.Color(0, 50, 0, 0) : strip.Color(50, 0, 0, 0));
+  }
+  strip.setPixelColor(3, strip.Color(0, 0, 0, 0));
+
+  // Dibujar base objetivo (en color amarillo tenue)
+  for (int i = targetStart; i <= targetEnd; i++) {
+    strip.setPixelColor(i, strip.Color(25, 20, 0, 0));
+  }
+
+  // Dibujar bloque en movimiento (Rojo brillante)
+  int blockPos = (int)stackerPosition;
+  for (int i = 0; i < blockWidth; i++) {
+    int p = blockPos + i;
+    if (p >= PLAY_AREA_START && p <= PLAY_AREA_END) {
+      strip.setPixelColor(p, strip.Color(150, 0, 0, 0));
     }
   }
 
   strip.show();
+}
+
+
+// ==================================================================================
+// JUEGO 4: SIMON LED PATTERN
+// ==================================================================================
+
+void initGame4() {
+  simonLength = 1;
+  simonIndex = 0;
+  simonState = SIMON_SHOW;
+  simonTimer = millis();
+  simonShowIndex = 0;
+  simonShowOn = false;
+
+  // Rellenar secuencia inicial
+  for (int i = 0; i < SIMON_MAX_LENGTH; i++) {
+    simonSequence[i] = random(0, 3); // 0: Blue, 1: Green, 2: Red
+  }
+}
+
+void handleGame4Playing() {
+  unsigned long now = millis();
+
+  if (simonState == SIMON_SHOW) {
+    // Velocidad de la secuencia según la ronda (cada vez más rápido)
+    unsigned long showSpeed = max(150UL, 400UL - (simonLength * 12UL));
+    unsigned long offSpeed = max(70UL, 180UL - (simonLength * 6UL));
+
+    if (simonShowOn) {
+      if (now - simonTimer >= showSpeed) {
+        simonShowOn = false;
+        simonTimer = now;
+        simonShowIndex++;
+        if (simonShowIndex >= simonLength) {
+          simonState = SIMON_INPUT;
+          simonIndex = 0;
+          Serial.println(F("Simon: Esperando entrada del jugador"));
+        }
+      }
+    } else {
+      if (now - simonTimer >= offSpeed && simonShowIndex < simonLength) {
+        simonShowOn = true;
+        simonTimer = now;
+        // Reproducir sonido e iluminar tira
+        BallColor color = (BallColor)simonSequence[simonShowIndex];
+        playSound(10 + color); // Sonidos 10 (Blue), 11 (Green), 12 (Red)
+      }
+    }
+
+    // Renderizar secuencia Simon
+    strip.clear();
+    
+    // Vidas
+    for (int i = 0; i < 3; i++) {
+      strip.setPixelColor(i, (i < lives) ? strip.Color(0, 50, 0, 0) : strip.Color(50, 0, 0, 0));
+    }
+
+    if (simonShowOn && simonShowIndex < simonLength) {
+      BallColor col = (BallColor)simonSequence[simonShowIndex];
+      // Iluminar toda la zona de juego con el color correspondiente
+      for (int p = PLAY_AREA_START; p <= PLAY_AREA_END; p++) {
+        strip.setPixelColor(p, getColorRGBW(col, 100));
+      }
+    }
+    strip.show();
+
+  } else {
+    // MODO ENTRADA JUGADOR (INPUT)
+    if (btnBlue.pressed || btnGreen.pressed || btnRed.pressed) {
+      BallColor pressedColor = COLOR_BLUE;
+      if (btnGreen.pressed) pressedColor = COLOR_GREEN;
+      else if (btnRed.pressed) pressedColor = COLOR_RED;
+
+      // Destello acústico y visual de la tecla presionada
+      playSound(10 + pressedColor);
+      strip.clear();
+      for (int i = 0; i < 3; i++) {
+        strip.setPixelColor(i, (i < lives) ? strip.Color(0, 50, 0, 0) : strip.Color(50, 0, 0, 0));
+      }
+      for (int p = PLAY_AREA_START; p <= PLAY_AREA_END; p++) {
+        strip.setPixelColor(p, getColorRGBW(pressedColor, 120));
+      }
+      strip.show();
+      delay(120);
+
+      // Comprobar coincidencia
+      if (pressedColor == simonSequence[simonIndex]) {
+        simonIndex++;
+        if (simonIndex >= simonLength) {
+          // Ronda superada
+          currentState = STATE_HIT;
+          simonLength++;
+          if (simonLength >= SIMON_MAX_LENGTH) {
+            // Completado al máximo
+            currentState = STATE_GAMEOVER;
+            return;
+          }
+          simonState = SIMON_SHOW;
+          simonShowIndex = 0;
+          simonShowOn = false;
+          simonTimer = millis() + 600; // Breve pausa antes de mostrar la secuencia
+        }
+      } else {
+        // Falló la secuencia
+        currentState = STATE_MISS;
+        if (lives > 0) {
+          // Repetir secuencia desde el inicio de la misma ronda
+          simonState = SIMON_SHOW;
+          simonShowIndex = 0;
+          simonShowOn = false;
+          simonTimer = millis() + 800;
+        }
+      }
+    }
+
+    // Dibujar en espera de entrada
+    strip.clear();
+    for (int i = 0; i < 3; i++) {
+      strip.setPixelColor(i, (i < lives) ? strip.Color(0, 50, 0, 0) : strip.Color(50, 0, 0, 0));
+    }
+    // Encender zona objetivo tenuemente en blanco
+    for (int p = 58; p <= 68; p++) {
+      strip.setPixelColor(p, strip.Color(0, 0, 0, 10));
+    }
+    strip.show();
+  }
 }
