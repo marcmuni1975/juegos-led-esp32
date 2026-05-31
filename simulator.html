@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador de Juego LED Vertical - ESP32</title>
+  
+  <!-- Google Fonts: Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #07070f;
+      --bg-card: rgba(18, 18, 30, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --neon-blue: #00f0ff;
+      --neon-green: #39ff14;
+      --neon-red: #ff0055;
+      --neon-gold: #ffaa00;
+      --neon-magenta: #f000ff;
+      --text-main: #f5f5fa;
+      --text-muted: #8e8ea8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 10% 10%, rgba(40, 20, 100, 0.25) 0px, transparent 50%),
+        radial-gradient(at 90% 90%, rgba(20, 60, 120, 0.25) 0px, transparent 50%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1100px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--neon-blue), var(--neon-magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 4px 20px rgba(0, 240, 255, 0.15);
+    }
+
+    header p {
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+      font-size: 1.1rem;
+    }
+
+    /* Layout: Vertical Tube on Left, Panels on Right */
+    .game-layout {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      .game-layout {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+    }
+
+    /* Glassmorphism Card base */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    /* --- VERTICAL LED TUBE (LEFT) --- */
+    .tube-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.2rem 0.8rem;
+      background: rgba(10, 10, 18, 0.9);
+      position: relative;
+    }
+
+    .tube-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.8rem;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    /* The outer acrylic tube casing */
+    .acrylic-tube {
+      width: 70px;
+      height: 720px;
+      background: linear-gradient(90deg, rgba(20,20,35,0.8), rgba(40,40,70,0.4) 30%, rgba(20,20,35,0.8));
+      border: 2px solid rgba(255,255,255,0.05);
+      border-top: 3px solid rgba(255,255,255,0.15);
+      border-bottom: 3px solid rgba(255,255,255,0.15);
+      border-radius: 35px;
+      box-shadow: 
+        inset 0 0 15px rgba(0,0,0,0.8),
+        0 10px 30px rgba(0,0,0,0.6),
+        0 0 15px rgba(0, 240, 255, 0.05);
+      display: flex;
+      justify-content: center;
+      padding: 25px 0;
+      position: relative;
+    }
+
+    /* Metal caps at top and bottom to look like a premium physical assembly */
+    .acrylic-tube::before, .acrylic-tube::after {
+      content: '';
+      position: absolute;
+      width: 82px;
+      height: 12px;
+      background: linear-gradient(180deg, #3a3a4a, #1a1a26);
+      border: 1px solid #4a4a5a;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+    }
+    .acrylic-tube::before {
+      top: -10px;
+      border-radius: 6px 6px 2px 2px;
+    }
+    .acrylic-tube::after {
+      bottom: -10px;
+      border-radius: 2px 2px 6px 6px;
+    }
+
+    /* The actual strip inside the tube - Column-Reverse puts index 0 at bottom! */
+    .led-strip-vertical {
+      height: 100%;
+      display: flex;
+      flex-direction: column-reverse;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5px;
+    }
+
+    .led {
+      width: 8px;
+      height: 4px;
+      border-radius: 2px;
+      background: #11111a;
+      border: 1px solid #1a1a26;
+      transition: background 0.05s ease, box-shadow 0.05s ease;
+      position: relative;
+    }
+
+    /* Target Zone Visual Bracket on the tube */
+    .target-bracket {
+      position: absolute;
+      left: 6px;
+      width: 58px;
+      /* Target is LEDs 60-66. Height calculated to match position exactly */
+      /* 720px total height, padding is 25px each side. strip space is 670px */
+      /* Target is in the middle (60/120) */
+      bottom: 355px; 
+      height: 42px;
+      border: 2px dashed rgba(255, 255, 255, 0.35);
+      border-radius: 6px;
+      pointer-events: none;
+      box-shadow: 0 0 10px rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .target-bracket::after {
+      content: 'OBJETIVO';
+      font-size: 0.55rem;
+      color: rgba(255,255,255,0.5);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      background: #000;
+      padding: 0 4px;
+      position: absolute;
+    }
+
+    /* Indicator labels beside the tube */
+    .tube-markers {
+      position: absolute;
+      right: -25px;
+      height: 670px;
+      top: 55px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      pointer-events: none;
+    }
+
+    /* --- RIGHT PANELS --- */
+    .main-panels {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .indicator-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .indicator-light {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff3b3b;
+    }
+
+    .indicator-light.active {
+      background: var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green);
+    }
+
+    /* Sound Control Panel */
+    .sound-toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      background: rgba(255,255,255,0.03);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer;
+    }
+
+    .toggle-switch {
+      width: 38px;
+      height: 20px;
+      background: #333;
+      border-radius: 10px;
+      position: relative;
+      transition: background 0.3s;
+    }
+
+    .toggle-knob {
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: left 0.3s;
+    }
+
+    .sound-toggle-container.active .toggle-switch {
+      background: var(--neon-green);
+    }
+    
+    .sound-toggle-container.active .toggle-knob {
+      left: 20px;
+    }
+
+    /* Scores */
+    .scores-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      text-align: center;
+    }
+
+    .score-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      padding: 1rem;
+    }
+
+    .score-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .score-value {
+      font-size: 2rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 0.25rem;
+    }
+
+    .score-value.green { color: var(--neon-green); }
+    .score-value.red { color: var(--neon-red); }
+    .score-value.gold { color: var(--neon-gold); }
+
+    .state-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.5rem 1.2rem;
+      border-radius: 30px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      width: fit-content;
+      margin: 0.5rem auto;
+    }
+
+    /* Button Panel */
+    .button-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .btn {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      padding: 0.75rem 1.75rem;
+      border-radius: 12px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      font-size: 1rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--neon-blue), #00a2ff);
+      color: #000;
+      box-shadow: 0 4px 15px rgba(0, 240, 255, 0.3);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 240, 255, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .physical-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      width: 100%;
+      margin: 0.8rem 0;
+    }
+
+    .game-btn {
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 1rem;
+      position: relative;
+      transition: transform 0.08s, box-shadow 0.08s;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.3);
+    }
+
+    .game-btn span {
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.7);
+      margin-top: 3px;
+      font-weight: 400;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .game-btn:active, .game-btn.active {
+      transform: translateY(4px);
+      box-shadow: 0 4px 0 rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.3);
+    }
+
+    .game-btn-blue {
+      background: radial-gradient(circle, #00d2ff, #0055ff);
+      border: 3px solid #00f0ff;
+    }
+    .game-btn-blue:hover {
+      box-shadow: 0 8px 0 rgba(0,0,0,0.5), 0 0 25px rgba(0, 240, 255, 0.6);
+    }
+
+    .game-btn-green {
+      background: radial-gradient(circle, #73ff00, #00aa00);
+      border: 3px solid #39ff14;
+    }
+    .game-btn-green:hover {
+      box-shadow: 0 8px 0 rgba(0,0,0,0.5), 0 0 25px rgba(57, 255, 20, 0.6);
+    }
+
+    .game-btn-red {
+      background: radial-gradient(circle, #ff3b6c, #aa0022);
+      border: 3px solid #ff0055;
+    }
+    .game-btn-red:hover {
+      box-shadow: 0 8px 0 rgba(0,0,0,0.5), 0 0 25px rgba(255, 0, 85, 0.6);
+    }
+
+    .keyboard-guide {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+      background: rgba(0,0,0,0.25);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    kbd {
+      background: #252535;
+      border-radius: 4px;
+      border: 1px solid #444;
+      padding: 2px 6px;
+      color: #fff;
+      font-family: monospace;
+      font-weight: bold;
+    }
+
+    /* Metricas */
+    .metrics-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 550px) {
+      .metrics-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Details and Connections */
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .details-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .diagram-box {
+      font-family: 'JetBrains Mono', monospace;
+      background: #04040a;
+      border: 1px solid #1a1a2a;
+      border-radius: 12px;
+      padding: 1.2rem;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.4;
+      color: #00ff66;
+    }
+
+    .instructions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding-left: 1.2rem;
+      font-size: 0.95rem;
+      color: #d1d1e0;
+    }
+
+    .instructions-list li strong {
+      color: var(--neon-blue);
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-color);
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    footer code {
+      background: rgba(255,255,255,0.03);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <h1>JUEGO LED VERTICAL</h1>
+    <p>Simulador de Reflejos de Color para Tiras en Torre</p>
+  </header>
+
+  <!-- Game Layout: Tube (Left), Controls (Right) -->
+  <div class="game-layout">
+    
+    <!-- Left: Vertical Tube -->
+    <div class="card tube-card">
+      <div class="tube-label">Tira 120 LEDs</div>
+      
+      <div class="acrylic-tube">
+        <!-- Target indicator bracket -->
+        <div class="target-bracket"></div>
+        
+        <!-- Markers of LED index -->
+        <div class="tube-markers">
+          <span>119 (Top)</span>
+          <span>90</span>
+          <span>63 (Obj)</span>
+          <span>30</span>
+          <span>10</span>
+          <span>0 (Bot)</span>
+        </div>
+
+        <div class="led-strip-vertical" id="led-strip">
+          <!-- Dynamically generated in JS (120 elements) -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Dashboard & Settings -->
+    <div class="main-panels">
+      
+      <!-- Status Box -->
+      <div class="card">
+        <div class="dashboard-header">
+          <div class="indicator-group">
+            <div class="indicator-light active" id="power-light"></div>
+            <span style="font-weight: 600; font-size: 0.9rem;">ESP32 CONECTADO (SIMULADO)</span>
+          </div>
+          <div class="sound-toggle-container active" id="sound-toggle" onclick="toggleSound()">
+            <span>Audio Sintetizado</span>
+            <div class="toggle-switch">
+              <div class="toggle-knob"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.2rem; display: flex; flex-direction: column; gap: 1.2rem;">
+          <!-- Score Grid -->
+          <div class="scores-grid">
+            <div class="score-box">
+              <div class="score-label">Puntos</div>
+              <div class="score-value green" id="score-val">0</div>
+            </div>
+            <div class="score-box">
+              <div class="score-label">Vidas</div>
+              <div class="score-value red" id="lives-val">3</div>
+            </div>
+            <div class="score-box">
+              <div class="score-label">Récord</div>
+              <div class="score-value gold" id="record-val">0</div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.15); padding: 0.8rem 1.2rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.03);">
+            <div>
+              <div class="score-label" style="text-align: left;">Estado de Placa</div>
+              <div class="state-badge" id="state-badge" style="margin: 0.25rem 0 0 0;">STATE_IDLE</div>
+            </div>
+            <div style="text-align: right;">
+              <button class="btn btn-primary" onclick="triggerStart()">Iniciar Partida</button>
+            </div>
+          </div>
+
+          <!-- Real-Time Metrics -->
+          <div class="metrics-panel">
+            <div class="score-box" style="text-align: left;">
+              <div class="score-label">Frecuencia de Paso</div>
+              <div style="font-size: 1.2rem; font-weight: 700; color: var(--neon-blue); margin-top: 4px; font-family: 'JetBrains Mono', monospace;" id="speed-val">120 ms</div>
+            </div>
+            <div class="score-box" style="text-align: left;">
+              <div class="score-label">Bola Actual</div>
+              <div style="font-size: 1.2rem; font-weight: 700; color: var(--text-muted); margin-top: 4px;" id="color-val">NINGUNA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls card -->
+      <div class="card button-panel">
+        <h2 style="font-size: 1.2rem; letter-spacing: -0.2px;">Pulsadores del Juego (Simulador)</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; max-width: 500px;">
+          Haz clic con el cursor o presiona los botones utilizando el teclado de tu computadora.
+        </p>
+
+        <div class="physical-buttons">
+          <button class="game-btn game-btn-blue" id="btn-blue" onmousedown="pressGameButton('blue')" onmouseup="releaseGameButton('blue')" onmouseleave="releaseGameButton('blue')">
+            AZUL
+            <span>Tecla J / Z</span>
+          </button>
+          <button class="game-btn game-btn-green" id="btn-green" onmousedown="pressGameButton('green')" onmouseup="releaseGameButton('green')" onmouseleave="releaseGameButton('green')">
+            VERDE
+            <span>Tecla K / X</span>
+          </button>
+          <button class="game-btn game-btn-red" id="btn-red" onmousedown="pressGameButton('red')" onmouseup="releaseGameButton('red')" onmouseleave="releaseGameButton('red')">
+            ROJO
+            <span>Tecla L / C</span>
+          </button>
+        </div>
+
+        <div class="keyboard-guide">
+          Teclado: <kbd>J</kbd> o <kbd>Z</kbd> (Azul) &nbsp;|&nbsp; <kbd>K</kbd> o <kbd>X</kbd> (Verde) &nbsp;|&nbsp; <kbd>L</kbd> o <kbd>C</kbd> (Rojo)
+        </div>
+        
+        <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem;" onclick="resetHighScore()">Reiniciar Récord</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Connection and Hardware details -->
+  <div class="details-grid">
+    
+    <!-- Schematic Diagram -->
+    <div class="card">
+      <h2 style="margin-bottom: 0.8rem; color: var(--neon-blue); font-size: 1.2rem;">Conexiones Eléctricas (ESP32 DevKit V1)</h2>
+      <div class="diagram-box">
+             CONEXIÓN CON UN SOLO CARGADOR DE 5V (Mínimo 3A / 15W)
+
+ Cargador 5V (USB)       ESP32 DevKit V1                 Componentes
+ ┌───────────────┐       ┌────────────────┐            ┌──────────────────────┐
+ │    5V (+) ────┼───┬───┼─ VIN / 5V      │            │                      │
+ │               │   │   │                │            │                      │
+ │               │   └───┼────────────────┼────────────┼─ Pin 5V (Tira LED)   │
+ │               │       │  GPIO13 (D13) ─┼───[330Ω]───┼─ Pin DIN (Tira LED)  │
+ │               │       │                │            │                      │
+ │    GND (-) ───┼───┬───┼─ GND           │            │                      │
+ │               │   │   │                │            │                      │
+ └───────────────┘   ├───┼────────────────┼────────────┼─ Pin GND (Tira LED)  │
+                     │   │                │            └──────────────────────┘
+                     └───┼─ GND (MP3/Btn) │
+                         │                │
+                         │  GPIO26 (D26) ─┼─[ Botón ]──┐
+                         │  GPIO25 (D25) ─┼─[ Botón ]──┼─ Un terminal a GND
+                         │  GPIO12 (D12) ─┼─[ Botón ]──┘
+                         │                │
+                         │  GPIO16 (RX2) ─┼──────────── Pin TX (MP3-TF-16P)
+                         │  GPIO17 (TX2) ─┼───[1kΩ]──── Pin RX (MP3-TF-16P)**
+                         └────────────────┘
+ * Nota: El cargador de 5V alimenta el ESP32 y los LEDs en paralelo. Nunca
+   alimentes la tira directamente desde el pin de 5V/VIN del ESP32.
+ ** Nota: Resistencia de 1kΩ es clave para filtrar ruido en el MP3.
+      </div>
+    </div>
+
+    <!-- MicroSD and Arduino Steps -->
+    <div class="card">
+      <h2 style="margin-bottom: 0.8rem; color: var(--neon-green); font-size: 1.2rem;">Estructura de Tarjeta MicroSD y Carga</h2>
+      <ul class="instructions-list">
+        <li>
+          <strong>Estructura de Audio Actualizada (3 Archivos):</strong>
+          Formatea la tarjeta MicroSD en FAT32, crea la carpeta <code>MP3</code> e incluye solo estos archivos:
+          <br>• <code>/MP3/0001.mp3</code>: Música ambiental / espera (Bucle continuo).
+          <br>• <code>/MP3/0002.mp3</code>: Efecto de Acierto (Hit rápido).
+          <br>• <code>/MP3/0003.mp3</code>: Efecto de Fallo / Game Over.
+        </li>
+        <li>
+          <strong>Tira LED Vertical (Cuesta Arriba):</strong>
+          La bola de luz se genera en la base (píxel 10) y viaja verticalmente hacia la punta (píxel 119). Debes atraparla cuando cruce la zona objetivo (píxeles 60 a 66).
+        </li>
+        <li>
+          <strong>Carga del Código Físico:</strong>
+          Abre el archivo <a href="file:///Users/markantony/Desktop/juegoled/juegoled.ino" style="color: var(--neon-blue); text-decoration: underline;">juegoled.ino</a> en Arduino IDE. Instala las librerías <strong>Adafruit NeoPixel</strong> y <strong>DFRobotDFPlayerMini</strong> desde la biblioteca y súbelo a tu ESP32.
+        </li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>Simulador actualizado para la configuración de Tira Vertical y 3 pistas de audio en MicroSD.</p>
+    <p>Rutas locales: Código en <code>/Users/markantony/Desktop/juegoled/juegoled.ino</code> | Especificaciones en <code>/Users/markantony/Desktop/juegoled/configuracion_juego_led_esp32.md</code></p>
+  </footer>
+
+</div>
+
+<!-- SIMULATION & AUDIO LOGIC -->
+<script>
+  // --- PARÁMETROS DEL JUEGO ---
+  const NUM_LEDS = 120;
+  const PLAY_AREA_START = 10;
+  const PLAY_AREA_END = 119;
+  const TARGET_START = 60;
+  const TARGET_END = 66;
+  const INITIAL_SPEED = 120; // ms
+  const MIN_SPEED = 35; // ms
+  const SPEED_INCREMENT = 4; // ms
+
+  // --- VARIABLES DE ESTADO ---
+  let currentState = 'STATE_IDLE';
+  let score = 0;
+  let lives = 3;
+  let highScore = parseInt(localStorage.getItem('juegoled_highscore')) || 0;
+  
+  let ballPosition = PLAY_AREA_START;
+  let currentBallColor = 'blue'; // blue, green, red
+  let ballSpeed = INITIAL_SPEED;
+  let gameInterval = null;
+  let attractModeInterval = null;
+  let attractHue = 0;
+  
+  let audioEnabled = true;
+  let audioContext = null;
+  let bgMusicOsc = null;
+  let bgMusicGain = null;
+  let bgMusicPlaying = false;
+  let bgMusicInterval = null;
+
+  // --- BOTONES FÍSICOS ---
+  const buttonsState = {
+    blue: { pin: 26, pressed: false },
+    green: { pin: 25, pressed: false },
+    red: { pin: 12, pressed: false }
+  };
+
+  // Inicialización de la tira en el DOM
+  const ledStripContainer = document.getElementById('led-strip');
+  const ledsElements = [];
+
+  function initLeds() {
+    ledStripContainer.innerHTML = '';
+    for (let i = 0; i < NUM_LEDS; i++) {
+      const led = document.createElement('div');
+      led.classList.add('led');
+      led.setAttribute('data-index', i);
+      
+      // Marcar visualmente la zona objetivo en la tira física
+      if (i >= TARGET_START && i <= TARGET_END) {
+        led.style.border = '1px solid rgba(255,255,255,0.3)';
+      }
+      
+      ledStripContainer.appendChild(led);
+      ledsElements.push(led);
+    }
+  }
+
+  // Actualizar display numérico
+  function updateScoresUI() {
+    document.getElementById('score-val').innerText = score;
+    document.getElementById('lives-val').innerText = lives;
+    document.getElementById('record-val').innerText = highScore;
+    document.getElementById('state-badge').innerText = currentState;
+    
+    document.getElementById('speed-val').innerText = ballSpeed.toFixed(0) + ' ms';
+    document.getElementById('color-val').innerText = currentState === 'STATE_PLAYING' ? currentBallColor.toUpperCase() : 'NINGUNA';
+    
+    const colorValEl = document.getElementById('color-val');
+    if (currentState === 'STATE_PLAYING') {
+      colorValEl.style.color = currentBallColor === 'blue' ? 'var(--neon-blue)' : currentBallColor === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
+    } else {
+      colorValEl.style.color = 'var(--text-muted)';
+    }
+  }
+
+  // --- WEB AUDIO API SYNTHESIZER (Reflejando la estructura de 3 pistas) ---
+  function initAudio() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+
+  function toggleSound() {
+    audioEnabled = !audioEnabled;
+    const btn = document.getElementById('sound-toggle');
+    if (audioEnabled) {
+      btn.classList.add('active');
+      if (currentState === 'STATE_IDLE' || currentState === 'STATE_PLAYING') {
+        playBgMusic();
+      }
+    } else {
+      btn.classList.remove('active');
+      stopBgMusic();
+    }
+  }
+
+  function playSynthSound(freqStart, freqEnd, type, duration, volume) {
+    if (!audioEnabled) return;
+    initAudio();
+    
+    try {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      
+      osc.type = type;
+      osc.frequency.setValueAtTime(freqStart, audioContext.currentTime);
+      if (freqEnd && freqStart !== freqEnd) {
+        osc.frequency.exponentialRampToValueAtTime(freqEnd, audioContext.currentTime + duration);
+      }
+      
+      gain.gain.setValueAtTime(volume, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      
+      osc.start();
+      osc.stop(audioContext.currentTime + duration);
+    } catch (e) {
+      console.warn("Audio context user interaction needed.", e);
+    }
+  }
+
+  // Reproducir Pistas según SD física (1, 2, 3)
+  function playTrack(trackNumber) {
+    if (!audioEnabled) return;
+    
+    switch (trackNumber) {
+      case 1: // /MP3/0001.mp3 -> Música de espera / loop de fondo
+        playBgMusic();
+        break;
+      case 2: // /MP3/0002.mp3 -> Sonido de Acierto (Hit)
+        playSynthSound(880, 1500, 'sine', 0.15, 0.2);
+        break;
+      case 3: // /MP3/0003.mp3 -> Sonido de Fallo / Game Over (Miss / GameOver)
+        stopBgMusic();
+        // Zumbador descendente dramático
+        playSynthSound(220, 70, 'sawtooth', 0.6, 0.35);
+        break;
+    }
+  }
+
+  // Música ambiental sintetizada para Track 0001.mp3
+  function playBgMusic() {
+    if (!audioEnabled || bgMusicPlaying) return;
+    initAudio();
+    
+    try {
+      bgMusicOsc = audioContext.createOscillator();
+      bgMusicGain = audioContext.createGain();
+      
+      bgMusicOsc.type = 'triangle';
+      bgMusicOsc.frequency.setValueAtTime(130.81, audioContext.currentTime); // C3
+      
+      bgMusicGain.gain.setValueAtTime(0.05, audioContext.currentTime);
+      
+      bgMusicOsc.connect(bgMusicGain);
+      bgMusicGain.connect(audioContext.destination);
+      
+      bgMusicOsc.start();
+      bgMusicPlaying = true;
+
+      // Secuencia armónica simple
+      let notes = [130.81, 146.83, 164.81, 196.00];
+      let idx = 0;
+      bgMusicInterval = setInterval(() => {
+        if (!bgMusicPlaying) return;
+        idx = (idx + 1) % notes.length;
+        bgMusicOsc.frequency.setValueAtTime(notes[idx], audioContext.currentTime);
+      }, 700);
+
+    } catch (e) {
+      console.warn("Audio context interaction issue", e);
+    }
+  }
+
+  function stopBgMusic() {
+    if (bgMusicPlaying) {
+      try {
+        bgMusicOsc.stop();
+        bgMusicOsc.disconnect();
+        bgMusicGain.disconnect();
+      } catch (e) {}
+      bgMusicPlaying = false;
+      if (bgMusicInterval) {
+        clearInterval(bgMusicInterval);
+        bgMusicInterval = null;
+      }
+    }
+  }
+
+  // --- LÓGICA DE CONTROL DE LA TIRA LED VERTICAL ---
+  function clearLeds() {
+    ledsElements.forEach(led => {
+      led.style.background = '#11111a';
+      led.style.boxShadow = 'none';
+    });
+  }
+
+  // Dibujar estado en la tira vertical
+  function drawGameLeds() {
+    clearLeds();
+
+    // 1. Dibujar Vidas en la base (LEDs 0, 1, 2)
+    for (let i = 0; i < 3; i++) {
+      if (i < lives) {
+        ledsElements[i].style.background = 'var(--neon-green)';
+        ledsElements[i].style.boxShadow = '0 0 8px var(--neon-green)';
+      } else {
+        ledsElements[i].style.background = 'var(--neon-red)';
+        ledsElements[i].style.boxShadow = '0 0 8px var(--neon-red)';
+      }
+    }
+    // LED 3 separador apagado
+    ledsElements[3].style.background = '#000';
+
+    // 2. Dibujar Zona Objetivo (LEDs 60 a 66) en blanco
+    for (let i = TARGET_START; i <= TARGET_END; i++) {
+      ledsElements[i].style.background = 'rgba(255, 255, 255, 0.25)';
+      ledsElements[i].style.boxShadow = 'inset 0 0 2px rgba(255,255,255,0.4)';
+    }
+
+    // 3. Dibujar la bola con blur de movimiento ascendente
+    if (currentState === 'STATE_PLAYING') {
+      const pos = Math.floor(ballPosition);
+      const colorHex = currentBallColor === 'blue' ? 'var(--neon-blue)' : currentBallColor === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
+      
+      if (pos >= PLAY_AREA_START && pos <= PLAY_AREA_END) {
+        // Pixel Central
+        ledsElements[pos].style.background = colorHex;
+        ledsElements[pos].style.boxShadow = `0 0 12px ${colorHex}, 0 0 4px #fff`;
+
+        // Pixeles de cola/blur (movimiento ascendente, así que la cola está abajo: pos - 1, pos - 2)
+        if (pos - 1 >= PLAY_AREA_START) {
+          ledsElements[pos - 1].style.background = getTranslucentColor(currentBallColor, 0.5);
+        }
+        if (pos - 2 >= PLAY_AREA_START) {
+          ledsElements[pos - 2].style.background = getTranslucentColor(currentBallColor, 0.2);
+        }
+        if (pos + 1 <= PLAY_AREA_END) {
+          ledsElements[pos + 1].style.background = getTranslucentColor(currentBallColor, 0.3);
+        }
+      }
+    }
+  }
+
+  function getTranslucentColor(color, opacity) {
+    if (color === 'blue') return `rgba(0, 240, 255, ${opacity})`;
+    if (color === 'green') return `rgba(57, 255, 20, ${opacity})`;
+    return `rgba(255, 0, 85, ${opacity})`;
+  }
+
+  // Generar nueva bola
+  function generateNewBall() {
+    ballPosition = PLAY_AREA_START;
+    const colors = ['blue', 'green', 'red'];
+    currentBallColor = colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  // --- MÁQUINA DE ESTADOS ---
+
+  // 1. IDLE TICK (Rainbow)
+  function startIdleAnimation() {
+    stopGameLoops();
+    playTrack(1); // Música ambiental
+    
+    attractHue = 0;
+    attractModeInterval = setInterval(() => {
+      attractHue = (attractHue + 2) % 360;
+      
+      for (let i = 0; i < NUM_LEDS; i++) {
+        const pixelHue = (attractHue + (i * 3)) % 360;
+        ledsElements[i].style.background = `hsl(${pixelHue}, 90%, 25%)`;
+        ledsElements[i].style.boxShadow = `0 0 4px hsl(${pixelHue}, 90%, 25%)`;
+      }
+      
+      // LEDs base parpadeantes de color para invitar a jugar
+      ledsElements[0].style.background = 'var(--neon-blue)';
+      ledsElements[0].style.boxShadow = '0 0 10px var(--neon-blue)';
+      ledsElements[1].style.background = 'var(--neon-green)';
+      ledsElements[1].style.boxShadow = '0 0 10px var(--neon-green)';
+      ledsElements[2].style.background = 'var(--neon-red)';
+      ledsElements[2].style.boxShadow = '0 0 10px var(--neon-red)';
+      
+    }, 45);
+  }
+
+  // 2. INICIO
+  function triggerStart() {
+    initAudio();
+    stopGameLoops();
+    
+    currentState = 'STATE_START';
+    updateScoresUI();
+    playTrack(1); // Reiniciar/Asegurar la música loop de fondo
+
+    // Destellos rápidos
+    let flashCount = 0;
+    const flashInterval = setInterval(() => {
+      if (flashCount % 2 === 0) {
+        ledsElements.forEach(led => {
+          led.style.background = 'rgba(255,255,255,0.8)';
+          led.style.boxShadow = '0 0 12px #fff';
+        });
+      } else {
+        clearLeds();
+      }
+      flashCount++;
+      if (flashCount >= 6) {
+        clearInterval(flashInterval);
+        startGameplay();
+      }
+    }, 150);
+  }
+
+  // 3. JUEGO ACTIVO
+  function startGameplay() {
+    currentState = 'STATE_PLAYING';
+    score = 0;
+    lives = 3;
+    ballSpeed = INITIAL_SPEED;
+    generateNewBall();
+    updateScoresUI();
+
+    gameInterval = setInterval(gameStep, ballSpeed);
+  }
+
+  function gameStep() {
+    if (currentState !== 'STATE_PLAYING') return;
+
+    ballPosition += 1;
+    
+    // Si la bola sale por arriba (LED 119) -> FALLO
+    if (ballPosition > PLAY_AREA_END) {
+      triggerMiss();
+      return;
+    }
+
+    drawGameLeds();
+    updateScoresUI();
+  }
+
+  // 4. ACIERTO
+  function triggerHit() {
+    currentState = 'STATE_HIT';
+    score++;
+    playTrack(2); // Sonido hit
+
+    // Aceleración gradual
+    ballSpeed = Math.max(MIN_SPEED, ballSpeed - SPEED_INCREMENT);
+    updateScoresUI();
+
+    const colorHex = currentBallColor === 'blue' ? 'var(--neon-blue)' : currentBallColor === 'green' ? 'var(--neon-green)' : 'var(--neon-red)';
+    let flashIndex = 0;
+    
+    clearInterval(gameInterval);
+
+    // Destello de acierto en la zona objetivo
+    const hitFlash = setInterval(() => {
+      for (let i = TARGET_START; i <= TARGET_END; i++) {
+        ledsElements[i].style.background = flashIndex % 2 === 0 ? colorHex : 'transparent';
+        ledsElements[i].style.boxShadow = flashIndex % 2 === 0 ? `0 0 20px ${colorHex}` : 'none';
+      }
+      flashIndex++;
+      if (flashIndex >= 6) {
+        clearInterval(hitFlash);
+        
+        generateNewBall();
+        currentState = 'STATE_PLAYING';
+        updateScoresUI();
+        gameInterval = setInterval(gameStep, ballSpeed);
+      }
+    }, 55);
+  }
+
+  // 5. FALLO
+  function triggerMiss() {
+    currentState = 'STATE_MISS';
+    lives--;
+    playTrack(3); // Sonido de fallo
+    
+    updateScoresUI();
+    clearInterval(gameInterval);
+
+    // Destello Rojo de fallo en la zona de objetivo
+    let flashIndex = 0;
+    const missFlash = setInterval(() => {
+      for (let i = TARGET_START; i <= TARGET_END; i++) {
+        ledsElements[i].style.background = flashIndex % 2 === 0 ? 'var(--neon-red)' : 'transparent';
+        ledsElements[i].style.boxShadow = flashIndex % 2 === 0 ? '0 0 20px var(--neon-red)' : 'none';
+      }
+      flashIndex++;
+      if (flashIndex >= 6) {
+        clearInterval(missFlash);
+        
+        if (lives <= 0) {
+          triggerGameOver();
+        } else {
+          // Continuar con música
+          playTrack(1);
+          generateNewBall();
+          currentState = 'STATE_PLAYING';
+          updateScoresUI();
+          gameInterval = setInterval(gameStep, ballSpeed);
+        }
+      }
+    }, 110);
+  }
+
+  // 6. FIN DE JUEGO (GAME OVER)
+  function triggerGameOver() {
+    currentState = 'STATE_GAMEOVER';
+    stopGameLoops();
+    
+    let isNewRecord = false;
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('juegoled_highscore', highScore);
+      isNewRecord = true;
+    }
+
+    updateScoresUI();
+    playTrack(3); // Sonido de fallo (como sonido de fin de juego)
+
+    // Renderizar puntajes acumulados en la tira
+    attractModeInterval = setInterval(() => {
+      clearLeds();
+      
+      // Barra de score amarilla ascendente
+      const scoreLimit = Math.min(score, 100);
+      for (let i = 0; i < scoreLimit; i++) {
+        ledsElements[i + 10].style.background = 'var(--neon-gold)';
+        ledsElements[i + 10].style.boxShadow = '0 0 3px var(--neon-gold)';
+      }
+
+      // Récord anterior en magenta parpadeante
+      const recordPos = Math.min(highScore, 100) + 10;
+      if (Math.floor(Date.now() / 300) % 2 === 0) {
+        ledsElements[recordPos].style.background = 'var(--neon-magenta)';
+        ledsElements[recordPos].style.boxShadow = '0 0 10px var(--neon-magenta)';
+      }
+
+      // Tres LEDs rojos en la base para vidas perdidas
+      for (let i = 0; i < 3; i++) {
+        ledsElements[i].style.background = 'var(--neon-red)';
+        ledsElements[i].style.boxShadow = '0 0 6px var(--neon-red)';
+      }
+
+      // Destellos blancos para nuevo récord
+      if (isNewRecord && Math.floor(Date.now() / 150) % 2 === 0) {
+        for (let i = 0; i < 10; i++) {
+          ledsElements[i].style.background = '#fff';
+          ledsElements[i].style.boxShadow = '0 0 8px #fff';
+        }
+      }
+    }, 100);
+  }
+
+  function stopGameLoops() {
+    if (gameInterval) clearInterval(gameInterval);
+    if (attractModeInterval) clearInterval(attractModeInterval);
+    stopBgMusic();
+  }
+
+  // --- BOTONES FÍSICOS Y TECLADO ---
+  function pressGameButton(color) {
+    if (buttonsState[color].pressed) return;
+    buttonsState[color].pressed = true;
+
+    const el = document.getElementById(`btn-${color}`);
+    if (el) el.classList.add('active');
+
+    if (currentState === 'STATE_PLAYING') {
+      const pos = Math.floor(ballPosition);
+      const insideTarget = (pos >= TARGET_START && pos <= TARGET_END);
+      
+      if (insideTarget) {
+        if (currentBallColor === color) {
+          triggerHit();
+        } else {
+          triggerMiss();
+        }
+      } else {
+        triggerMiss();
+      }
+    } else if (currentState === 'STATE_IDLE') {
+      triggerStart();
+    } else if (currentState === 'STATE_GAMEOVER') {
+      currentState = 'STATE_IDLE';
+      startIdleAnimation();
+      updateScoresUI();
+    }
+  }
+
+  function releaseGameButton(color) {
+    buttonsState[color].pressed = false;
+    const el = document.getElementById(`btn-${color}`);
+    if (el) el.classList.remove('active');
+  }
+
+  // Mapear teclado físico
+  window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if (key === 'j' || key === 'z') pressGameButton('blue');
+    else if (key === 'k' || key === 'x') pressGameButton('green');
+    else if (key === 'l' || key === 'c') pressGameButton('red');
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    if (key === 'j' || key === 'z') releaseGameButton('blue');
+    else if (key === 'k' || key === 'x') releaseGameButton('green');
+    else if (key === 'l' || key === 'c') releaseGameButton('red');
+  });
+
+  function resetHighScore() {
+    localStorage.removeItem('juegoled_highscore');
+    highScore = 0;
+    updateScoresUI();
+    playSynthSound(150, 150, 'sawtooth', 0.25, 0.1);
+  }
+
+  // --- CARGA DE PÁGINA ---
+  window.onload = () => {
+    initLeds();
+    updateScoresUI();
+    startIdleAnimation();
+  };
+</script>
+
+</body>
+</html>

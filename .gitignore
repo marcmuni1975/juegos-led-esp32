@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Arduino IDE build files
+build/
+*.local.properties
+*.spec
+
+# Temporary files
+*.tmp
+*.bak
+*~
